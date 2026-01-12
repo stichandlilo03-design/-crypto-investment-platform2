@@ -4,10 +4,11 @@ import { motion } from 'framer-motion'
 import { Mail, Lock, Wallet, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { createSupabaseClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
-  const { signIn, signInWithGoogle, signInWithGithub } = useAuth()
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -21,18 +22,34 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const { error: signInError } = await signIn(formData.email, formData.password)
+    const supabase = createSupabaseClient()
+    
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: formData.email,
+      password: formData.password
+    })
     
     if (signInError) {
       setError(signInError.message)
       setLoading(false)
+    } else {
+      router.push('/dashboard')
     }
   }
 
   const handleGoogleLogin = async () => {
     setLoading(true)
     setError('')
-    const { error: googleError } = await signInWithGoogle()
+    
+    const supabase = createSupabaseClient()
+    
+    const { error: googleError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    })
+    
     if (googleError) {
       setError(googleError.message)
       setLoading(false)
@@ -42,7 +59,16 @@ export default function LoginPage() {
   const handleGithubLogin = async () => {
     setLoading(true)
     setError('')
-    const { error: githubError } = await signInWithGithub()
+    
+    const supabase = createSupabaseClient()
+    
+    const { error: githubError } = await supabase.auth.signInWithOAuth({
+      provider: 'github',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    })
+    
     if (githubError) {
       setError(githubError.message)
       setLoading(false)
