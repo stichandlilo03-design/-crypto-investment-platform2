@@ -5,9 +5,10 @@ import {
   Wallet, ArrowUpRight, ArrowDownRight, DollarSign,
   PieChart, Activity, Settings, LogOut, Bell, Search, Download, Upload,
   Eye, EyeOff, History, UserCircle, Menu, X, Check, Clock, AlertCircle, FileText,
-  CheckCircle, Loader2, Copy, ExternalLink
+  CheckCircle, Loader2, Copy, ExternalLink, CreditCard, Building, Globe,
+  Mail, Phone, MapPin, User, Shield, HelpCircle
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 // Define types
 interface CryptoPrice {
@@ -26,22 +27,33 @@ interface DepositRequest {
   paymentMethod: 'wire' | 'crypto';
   walletAddress?: string;
   txHash?: string;
-  paymentProof?: string;
+  paymentProof?: File | string;
 }
 
 interface WithdrawalRequest {
   userId: string;
   amount: number;
   asset: string;
-  walletAddress: string;
+  walletAddress?: string;
+  bankDetails?: {
+    accountName: string;
+    accountNumber: string;
+    bankName: string;
+    swiftCode: string;
+    country: string;
+  };
 }
 
 interface UserData {
   id: string;
   email: string;
+  firstName: string;
+  lastName: string;
   balance: number;
   totalDeposits: number;
   totalWithdrawals: number;
+  phone?: string;
+  country?: string;
 }
 
 // Demo wallet addresses (replace with real ones)
@@ -50,6 +62,18 @@ const DEMO_WALLETS = {
   ETH: '0x742d35Cc6634C0532925a3b844Bc9e70C6d4e5a1',
   USDT: 'TBA6C4H5G7J8K9L0M1N2P3Q4R5S6T7U8V9W0',
   USD: 'Bank Transfer Only'
+}
+
+// Demo wire transfer details (replace with your details)
+const WIRE_TRANSFER_DETAILS = {
+  bankName: 'JPMorgan Chase Bank',
+  accountName: 'CRYPTOVAULT TRADING LTD',
+  accountNumber: '9876543210',
+  routingNumber: '021000021',
+  swiftCode: 'CHASUS33',
+  iban: 'US70000000000000000000',
+  address: '383 Madison Avenue, New York, NY 10017, USA',
+  reference: 'DEPOSIT-USERID'
 }
 
 export default function DashboardPage() {
@@ -67,6 +91,8 @@ export default function DashboardPage() {
   const [withdrawError, setWithdrawError] = useState('')
   const [userData, setUserData] = useState<UserData | null>(null)
   const [transactions, setTransactions] = useState<any[]>([])
+  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
+  const [paymentProofPreview, setPaymentProofPreview] = useState<string | null>(null)
 
   // Mock user ID - in real app, get from auth
   const userId = 'user-123'
@@ -82,10 +108,14 @@ export default function DashboardPage() {
         // Mock data - replace with real API call
         setUserData({
           id: userId,
-          email: 'user@example.com',
-          balance: 0, // Start with 0 balance
+          email: 'john.doe@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          balance: 0,
           totalDeposits: 0,
-          totalWithdrawals: 0
+          totalWithdrawals: 0,
+          phone: '+1 (555) 123-4567',
+          country: 'United States'
         })
       } catch (error) {
         console.error('Error fetching user data:', error)
@@ -115,6 +145,37 @@ export default function DashboardPage() {
     return () => clearInterval(interval)
   }, [])
 
+  // Handle file upload for payment proof
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      alert('Please upload an image or PDF file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB')
+      return
+    }
+
+    setPaymentProofFile(file)
+
+    // Create preview for images
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setPaymentProofPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    } else {
+      setPaymentProofPreview(null)
+    }
+  }
+
   // Handle deposit submission
   const handleDeposit = async (data: DepositRequest) => {
     setDepositLoading(true)
@@ -122,18 +183,20 @@ export default function DashboardPage() {
     setDepositSuccess(false)
     
     try {
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('userId', data.userId)
+      formData.append('amount', data.amount.toString())
+      formData.append('asset', data.asset)
+      formData.append('paymentMethod', data.paymentMethod)
+      
+      if (data.txHash) formData.append('txHash', data.txHash)
+      if (data.walletAddress) formData.append('walletAddress', data.walletAddress)
+      if (paymentProofFile) formData.append('paymentProof', paymentProofFile)
+      
       const response = await fetch('/api/deposit', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...data,
-          // Add payment proof if wire transfer
-          paymentProof: data.paymentMethod === 'wire' ? data.paymentProof : undefined,
-          // Add transaction hash if crypto
-          txHash: data.paymentMethod === 'crypto' ? data.txHash : undefined
-        })
+        body: formData
       })
       
       const result = await response.json()
@@ -144,7 +207,7 @@ export default function DashboardPage() {
       
       setDepositSuccess(true)
       
-      // Update user balance locally (in real app, this would come from server)
+      // Update user data locally
       if (userData) {
         setUserData({
           ...userData,
@@ -168,6 +231,8 @@ export default function DashboardPage() {
       setTimeout(() => {
         setDepositSuccess(false)
         setSelectedTab('overview')
+        setPaymentProofFile(null)
+        setPaymentProofPreview(null)
       }, 5000)
       
     } catch (error) {
@@ -207,7 +272,7 @@ export default function DashboardPage() {
       
       setWithdrawSuccess(true)
       
-      // Update user balance locally (in real app, this would come from server)
+      // Update user balance locally
       if (userData) {
         setUserData({
           ...userData,
@@ -224,7 +289,8 @@ export default function DashboardPage() {
         amount: `-${data.amount}`,
         value: `-$${data.amount}`,
         status: 'Pending',
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        method: data.asset === 'USD' ? 'Bank Transfer' : 'Crypto'
       }, ...prev])
       
       // Reset form after success
@@ -244,7 +310,7 @@ export default function DashboardPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
       .then(() => {
-        alert('Wallet address copied to clipboard!')
+        alert('Copied to clipboard!')
       })
       .catch(err => {
         console.error('Failed to copy:', err)
@@ -327,7 +393,9 @@ export default function DashboardPage() {
             </button>
             <div>
               <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-              <p className="text-gray-400">Welcome back, {userData?.email || 'User'}!</p>
+              <p className="text-gray-400">
+                Welcome back, {userData ? `${userData.firstName} ${userData.lastName}` : 'User'}!
+              </p>
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -340,17 +408,20 @@ export default function DashboardPage() {
               <Bell className="w-5 h-5 text-white" />
             </button>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-              <span className="text-white font-bold">U</span>
+              <span className="text-white font-bold">
+                {userData?.firstName?.charAt(0) || 'U'}{userData?.lastName?.charAt(0) || ''}
+              </span>
             </div>
           </div>
         </div>
 
         {/* Content Tabs */}
         {selectedTab === 'overview' && <OverviewTab userData={userData} hideBalance={hideBalance} />}
-        {selectedTab === 'deposit' && <DepositTab onSubmit={handleDeposit} loading={depositLoading} success={depositSuccess} error={depositError} />}
+        {selectedTab === 'deposit' && <DepositTab onSubmit={handleDeposit} loading={depositLoading} success={depositSuccess} error={depositError} paymentProofFile={paymentProofFile} paymentProofPreview={paymentProofPreview} onFileUpload={handleFileUpload} />}
         {selectedTab === 'withdraw' && <WithdrawTab onSubmit={handleWithdrawal} loading={withdrawLoading} success={withdrawSuccess} error={withdrawError} userBalance={userData?.balance || 0} />}
         {selectedTab === 'transactions' && <TransactionsTab transactions={transactions} />}
         {selectedTab === 'markets' && <MarketsTab prices={cryptoPrices} />}
+        {selectedTab === 'settings' && <SettingsTab userData={userData} />}
       </main>
     </div>
   )
@@ -445,17 +516,20 @@ export default function DashboardPage() {
     )
   }
 
-  function DepositTab({ onSubmit, loading, success, error }: { 
+  function DepositTab({ onSubmit, loading, success, error, paymentProofFile, paymentProofPreview, onFileUpload }: { 
     onSubmit: (data: DepositRequest) => void; 
     loading: boolean;
     success: boolean;
     error: string;
+    paymentProofFile: File | null;
+    paymentProofPreview: string | null;
+    onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   }) {
     const [amount, setAmount] = useState('')
     const [asset, setAsset] = useState('USD')
     const [paymentMethod, setPaymentMethod] = useState<'wire' | 'crypto'>('wire')
     const [txHash, setTxHash] = useState('')
-    const [paymentProof, setPaymentProof] = useState('')
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault()
@@ -465,8 +539,8 @@ export default function DashboardPage() {
         return
       }
       
-      if (paymentMethod === 'wire' && !paymentProof) {
-        alert('Please provide payment proof for wire transfers')
+      if (paymentMethod === 'wire' && !paymentProofFile) {
+        alert('Please upload payment proof for wire transfers')
         return
       }
       
@@ -475,10 +549,18 @@ export default function DashboardPage() {
         amount: parseFloat(amount),
         asset,
         paymentMethod,
-        walletAddress: DEMO_WALLETS[asset as keyof typeof DEMO_WALLETS],
+        walletAddress: paymentMethod === 'crypto' ? DEMO_WALLETS[asset as keyof typeof DEMO_WALLETS] : undefined,
         txHash: paymentMethod === 'crypto' ? txHash : undefined,
-        paymentProof: paymentMethod === 'wire' ? paymentProof : undefined
+        paymentProof: paymentProofFile || undefined
       })
+    }
+
+    const removePaymentProof = () => {
+      setPaymentProofFile(null)
+      setPaymentProofPreview(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
 
     return (
@@ -523,7 +605,7 @@ export default function DashboardPage() {
               className={`p-6 rounded-xl border-2 transition-all ${paymentMethod === 'wire' ? 'border-green-500 bg-green-500/10' : 'border-white/10 bg-white/5 hover:border-green-500/50'}`}
             >
               <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mb-3">
-                <span className="text-white text-xl">$</span>
+                <Building className="w-6 h-6 text-white" />
               </div>
               <h3 className="text-white font-bold mb-2">Wire Transfer</h3>
               <p className="text-gray-400 text-sm">Bank transfer (USD)</p>
@@ -539,9 +621,9 @@ export default function DashboardPage() {
               className={`p-6 rounded-xl border-2 transition-all ${paymentMethod === 'crypto' ? 'border-green-500 bg-green-500/10' : 'border-white/10 bg-white/5 hover:border-green-500/50'}`}
             >
               <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center mb-3">
-                <span className="text-white text-xl">₿</span>
+                <Globe className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-white font-bold mb-2">Crypto</h3>
+              <h3 className="text-white font-bold mb-2">Cryptocurrency</h3>
               <p className="text-gray-400 text-sm">BTC, ETH, USDT</p>
               {paymentMethod === 'crypto' && (
                 <div className="mt-3">
@@ -573,8 +655,65 @@ export default function DashboardPage() {
               ))}
             </div>
             <p className="text-gray-400 text-sm mt-4">
-              Send only {paymentMethod === 'crypto' ? asset : 'USD'} to this address. Sending other assets may result in loss of funds.
+              Send only {asset} to this address. Sending other assets may result in loss of funds.
             </p>
+          </div>
+        )}
+
+        {paymentMethod === 'wire' && (
+          <div className="glass-effect rounded-2xl p-6 mb-8">
+            <h2 className="text-xl font-bold text-white mb-4">Wire Transfer Details</h2>
+            <div className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Bank Name</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.bankName}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Account Name</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.accountName}</p>
+                </div>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Account Number</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.accountNumber}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Routing Number</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.routingNumber}</p>
+                </div>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">SWIFT Code</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.swiftCode}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">IBAN</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.iban}</p>
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-gray-400 text-sm mb-1">Bank Address</p>
+                <p className="text-white">{WIRE_TRANSFER_DETAILS.address}</p>
+              </div>
+              
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                <div className="flex items-start space-x-2">
+                  <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-yellow-400 font-medium mb-1">Important</p>
+                    <p className="text-yellow-400/80 text-sm">
+                      Use <span className="font-bold">"{WIRE_TRANSFER_DETAILS.reference}"</span> as payment reference
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -600,7 +739,7 @@ export default function DashboardPage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
-                min="0"
+                min="50"
                 step="0.01"
                 required
               />
@@ -617,19 +756,73 @@ export default function DashboardPage() {
               )}
               
               {paymentMethod === 'wire' && (
-                <FormField 
-                  label="Payment Proof (Transaction ID/Receipt)" 
-                  type="text" 
-                  value={paymentProof}
-                  onChange={(e) => setPaymentProof(e.target.value)}
-                  placeholder="Enter transaction ID or upload receipt"
-                  required
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Payment Proof (Transaction ID/Receipt)*
+                  </label>
+                  <div className="border-2 border-dashed border-white/10 rounded-xl p-6 hover:border-purple-500/50 transition-colors">
+                    {paymentProofFile ? (
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center space-x-3">
+                            <FileText className="w-8 h-8 text-blue-400" />
+                            <div>
+                              <p className="text-white font-medium">{paymentProofFile.name}</p>
+                              <p className="text-gray-400 text-sm">
+                                {(paymentProofFile.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={removePaymentProof}
+                            className="p-2 rounded-lg hover:bg-white/10"
+                          >
+                            <X className="w-4 h-4 text-gray-400" />
+                          </button>
+                        </div>
+                        
+                        {paymentProofPreview && (
+                          <div className="mt-4">
+                            <img 
+                              src={paymentProofPreview} 
+                              alt="Payment proof preview" 
+                              className="max-w-full h-auto max-h-48 rounded-lg mx-auto"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <p className="text-gray-400 mb-2">Click to upload payment proof</p>
+                        <p className="text-gray-500 text-sm mb-4">PNG, JPG, PDF up to 5MB</p>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                        >
+                          Choose File
+                        </button>
+                      </div>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={onFileUpload}
+                      accept="image/*,.pdf"
+                      className="hidden"
+                    />
+                  </div>
+                  <p className="text-gray-500 text-sm mt-2">
+                    Upload screenshot or PDF of bank transfer receipt
+                  </p>
+                </div>
               )}
               
               <button 
                 type="submit"
-                disabled={loading || !amount}
+                disabled={loading || !amount || (paymentMethod === 'wire' && !paymentProofFile)}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
                 {loading ? (
@@ -662,7 +855,7 @@ export default function DashboardPage() {
                   {paymentMethod === 'wire' && (
                     <>
                       <li>• Include bank transfer receipt/screenshot</li>
-                      <li>• Use reference: DEPOSIT-{userId}</li>
+                      <li>• Use reference: {WIRE_TRANSFER_DETAILS.reference}</li>
                     </>
                   )}
                 </ul>
@@ -675,146 +868,232 @@ export default function DashboardPage() {
   }
 
   function WithdrawTab({ onSubmit, loading, success, error, userBalance }: { 
-  onSubmit: (data: WithdrawalRequest) => void; 
-  loading: boolean;
-  success: boolean;
-  error: string;
-  userBalance: number;
-}) {
-  const [amount, setAmount] = useState('')
-  const [asset, setAsset] = useState('USD')
-  const [walletAddress, setWalletAddress] = useState('')
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (parseFloat(amount) > userBalance) {
-      alert('Amount exceeds available balance')
-      return
-    }
-    
-    onSubmit({
-      userId,
-      amount: parseFloat(amount),
-      asset,
-      walletAddress
+    onSubmit: (data: WithdrawalRequest) => void; 
+    loading: boolean;
+    success: boolean;
+    error: string;
+    userBalance: number;
+  }) {
+    const [amount, setAmount] = useState('')
+    const [asset, setAsset] = useState('USD')
+    const [walletAddress, setWalletAddress] = useState('')
+    const [bankDetails, setBankDetails] = useState({
+      accountName: '',
+      accountNumber: '',
+      bankName: '',
+      swiftCode: '',
+      country: ''
     })
-  }
 
-  return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold text-white mb-8">Withdraw Funds</h1>
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault()
       
-      <div className="glass-effect rounded-2xl p-6 mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-400 text-sm">Available Balance</p>
-            <p className="text-3xl font-bold text-white">${userBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <Wallet className="w-6 h-6 text-white" />
-          </div>
-        </div>
-      </div>
+      if (parseFloat(amount) > userBalance) {
+        alert('Amount exceeds available balance')
+        return
+      }
       
-      {success && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl"
-        >
-          <div className="flex items-center space-x-3">
-            <CheckCircle className="w-5 h-5 text-green-400" />
-            <div>
-              <p className="text-green-400 font-medium">Withdrawal request submitted!</p>
-              <p className="text-green-400/80 text-sm">Waiting for admin approval. You'll be notified once approved.</p>
-            </div>
-          </div>
-        </motion.div>
-      )}
+      const data: WithdrawalRequest = {
+        userId,
+        amount: parseFloat(amount),
+        asset,
+      }
+      
+      if (asset === 'USD') {
+        // Validate bank details
+        if (!bankDetails.accountName || !bankDetails.accountNumber || !bankDetails.bankName) {
+          alert('Please fill in all required bank details')
+          return
+        }
+        data.bankDetails = bankDetails
+      } else {
+        // Validate wallet address
+        if (!walletAddress) {
+          alert('Please enter wallet address')
+          return
+        }
+        data.walletAddress = walletAddress
+      }
+      
+      onSubmit(data)
+    }
 
-      {error && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
-        >
-          <div className="flex items-center space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-400" />
-            <p className="text-red-400 font-medium">{error}</p>
-          </div>
-        </motion.div>
-      )}
-
-      <div className="glass-effect rounded-2xl p-6">
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-6">
-            <FormField 
-              label="Select Asset" 
-              type="select" 
-              value={asset}
-              onChange={(e) => setAsset(e.target.value)}
-              options={['USD', 'BTC', 'ETH', 'USDT']} 
-              required
-            />
-            
-            <FormField 
-              label="Amount" 
-              type="number" 
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              min="0"
-              max={userBalance.toString()}  // ← FIX IS HERE
-              step="0.01"
-              required
-            />
-            
-            <FormField 
-              label="Destination Wallet Address" 
-              type="text" 
-              value={walletAddress}
-              onChange={(e) => setWalletAddress(e.target.value)}
-              placeholder="Enter your wallet address"
-              required
-            />
-            
-            <button 
-              type="submit"
-              disabled={loading || !amount || !walletAddress || parseFloat(amount) > userBalance}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <span>Request Withdrawal</span>
-              )}
-            </button>
-          </div>
-        </form>
+    return (
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-8">Withdraw Funds</h1>
         
-        <div className="mt-8 p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-          <div className="flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
+        <div className="glass-effect rounded-2xl p-6 mb-8">
+          <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-yellow-400 font-semibold mb-1">Important Information</h4>
-              <ul className="text-gray-300 text-sm space-y-1">
-                <li>• All withdrawals require admin approval</li>
-                <li>• Processing time: 24-48 hours</li>
-                <li>• Minimum withdrawal: $50</li>
-                <li>• Network fees may apply for crypto withdrawals</li>
-                <li>• Ensure wallet address is correct</li>
-              </ul>
+              <p className="text-gray-400 text-sm">Available Balance</p>
+              <p className="text-3xl font-bold text-white">${userBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <Wallet className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </div>
+        
+        {success && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl"
+          >
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-400" />
+              <div>
+                <p className="text-green-400 font-medium">Withdrawal request submitted!</p>
+                <p className="text-green-400/80 text-sm">Waiting for admin approval. You'll be notified once approved.</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
+          >
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <p className="text-red-400 font-medium">{error}</p>
+            </div>
+          </motion.div>
+        )}
+
+        <div className="glass-effect rounded-2xl p-6">
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-6">
+              <FormField 
+                label="Select Asset" 
+                type="select" 
+                value={asset}
+                onChange={(e) => {
+                  setAsset(e.target.value)
+                  setWalletAddress('')
+                  setBankDetails({
+                    accountName: '',
+                    accountNumber: '',
+                    bankName: '',
+                    swiftCode: '',
+                    country: ''
+                  })
+                }}
+                options={['USD', 'BTC', 'ETH', 'USDT']} 
+                required
+              />
+              
+              <FormField 
+                label="Amount" 
+                type="number" 
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                min="50"
+                max={userBalance.toString()}
+                step="0.01"
+                required
+              />
+              
+              {asset === 'USD' ? (
+                <div className="space-y-4">
+                  <h3 className="text-white font-semibold">Bank Details</h3>
+                  
+                  <FormField 
+                    label="Account Holder Name*" 
+                    type="text" 
+                    value={bankDetails.accountName}
+                    onChange={(e) => setBankDetails({...bankDetails, accountName: e.target.value})}
+                    placeholder="Enter account holder name"
+                    required
+                  />
+                  
+                  <FormField 
+                    label="Account Number*" 
+                    type="text" 
+                    value={bankDetails.accountNumber}
+                    onChange={(e) => setBankDetails({...bankDetails, accountNumber: e.target.value})}
+                    placeholder="Enter account number"
+                    required
+                  />
+                  
+                  <FormField 
+                    label="Bank Name*" 
+                    type="text" 
+                    value={bankDetails.bankName}
+                    onChange={(e) => setBankDetails({...bankDetails, bankName: e.target.value})}
+                    placeholder="Enter bank name"
+                    required
+                  />
+                  
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <FormField 
+                      label="SWIFT/BIC Code" 
+                      type="text" 
+                      value={bankDetails.swiftCode}
+                      onChange={(e) => setBankDetails({...bankDetails, swiftCode: e.target.value})}
+                      placeholder="Enter SWIFT code"
+                    />
+                    
+                    <FormField 
+                      label="Country" 
+                      type="text" 
+                      value={bankDetails.country}
+                      onChange={(e) => setBankDetails({...bankDetails, country: e.target.value})}
+                      placeholder="Enter country"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <FormField 
+                  label={`${asset} Wallet Address*`} 
+                  type="text" 
+                  value={walletAddress}
+                  onChange={(e) => setWalletAddress(e.target.value)}
+                  placeholder={`Enter your ${asset} wallet address`}
+                  required
+                />
+              )}
+              
+              <button 
+                type="submit"
+                disabled={loading || !amount || (asset === 'USD' ? (!bankDetails.accountName || !bankDetails.accountNumber || !bankDetails.bankName) : !walletAddress)}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Request Withdrawal</span>
+                )}
+              </button>
+            </div>
+          </form>
+          
+          <div className="mt-8 p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+            <div className="flex items-start space-x-3">
+              <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
+              <div>
+                <h4 className="text-yellow-400 font-semibold mb-1">Important Information</h4>
+                <ul className="text-gray-300 text-sm space-y-1">
+                  <li>• All withdrawals require admin approval</li>
+                  <li>• Processing time: 24-48 hours</li>
+                  <li>• Minimum withdrawal: $50</li>
+                  <li>• Network fees may apply for crypto withdrawals</li>
+                  <li>• Ensure wallet/bank details are correct</li>
+                  <li>• Double-check all information before submitting</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  )
-}
+    )
+  }
 
   function TransactionsTab({ transactions }: { transactions: any[] }) {
     return (
@@ -840,7 +1119,7 @@ export default function DashboardPage() {
                 <thead>
                   <tr className="border-b border-white/10">
                     <th className="text-left py-3 text-gray-400">Type</th>
-                    <th className="text-left py-3 text-gray-400">Asset</th>
+                    <th className="text-left py-3 text-gray-400">Asset/Method</th>
                     <th className="text-left py-3 text-gray-400">Amount</th>
                     <th className="text-left py-3 text-gray-400">Value</th>
                     <th className="text-left py-3 text-gray-400">Status</th>
@@ -850,8 +1129,15 @@ export default function DashboardPage() {
                 <tbody>
                   {transactions.map((tx) => (
                     <tr key={tx.id} className="border-b border-white/5 hover:bg-white/5">
-                      <td className="py-4 text-white">{tx.type}</td>
-                      <td className="py-4 text-white">{tx.asset}</td>
+                      <td className="py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs ${tx.type === 'deposit' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
+                          {tx.type}
+                        </span>
+                      </td>
+                      <td className="py-4">
+                        <div className="text-white">{tx.asset}</div>
+                        {tx.method && <div className="text-gray-400 text-xs">{tx.method}</div>}
+                      </td>
                       <td className={`py-4 ${tx.amount.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>{tx.amount}</td>
                       <td className="py-4 text-white">{tx.value}</td>
                       <td className="py-4">
@@ -889,6 +1175,151 @@ export default function DashboardPage() {
               </p>
             </div>
           ))}
+        </div>
+      </div>
+    )
+  }
+
+  function SettingsTab({ userData }: { userData: UserData | null }) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-8">Settings</h1>
+        
+        <div className="glass-effect rounded-2xl p-6 mb-8">
+          <h2 className="text-xl font-bold text-white mb-6 flex items-center">
+            <User className="w-5 h-5 mr-2" />
+            Profile Information
+          </h2>
+          
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">First Name</label>
+              <input
+                type="text"
+                value={userData?.firstName || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Last Name</label>
+              <input
+                type="text"
+                value={userData?.lastName || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-400 mb-2">Email Address</label>
+              <input
+                type="email"
+                value={userData?.email || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Phone Number</label>
+              <input
+                type="tel"
+                value={userData?.phone || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Country</label>
+              <input
+                type="text"
+                value={userData?.country || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
+            </div>
+          </div>
+        </div>
+        
+        <div className="glass-effect rounded-2xl p-6 mb-8">
+          <h2 className="text-xl font-bold text-white mb-6 flex items-center">
+            <Shield className="w-5 h-5 mr-2" />
+            Security
+          </h2>
+          
+          <div className="space-y-4">
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Two-Factor Authentication</p>
+                  <p className="text-gray-400 text-sm">Add an extra layer of security</p>
+                </div>
+                <span className="text-gray-400">Disabled</span>
+              </div>
+            </button>
+            
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Change Password</p>
+                  <p className="text-gray-400 text-sm">Update your password regularly</p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+            
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Login History</p>
+                  <p className="text-gray-400 text-sm">View recent login activity</p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+          </div>
+        </div>
+        
+        <div className="glass-effect rounded-2xl p-6">
+          <h2 className="text-xl font-bold text-white mb-6 flex items-center">
+            <HelpCircle className="w-5 h-5 mr-2" />
+            Support
+          </h2>
+          
+          <div className="space-y-4">
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Contact Support</p>
+                  <p className="text-gray-400 text-sm">Get help from our support team</p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+            
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">FAQ</p>
+                  <p className="text-gray-400 text-sm">Frequently asked questions</p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+            
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Documentation</p>
+                  <p className="text-gray-400 text-sm">User guides and tutorials</p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     )
