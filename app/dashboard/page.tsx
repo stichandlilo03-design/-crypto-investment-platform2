@@ -48,11 +48,10 @@ interface WithdrawalRequest {
 interface UserData {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  full_name: string;
   balance: number;
-  totalDeposits: number;
-  totalWithdrawals: number;
+  total_deposits: number;
+  total_withdrawals: number;
   phone?: string;
   country?: string;
 }
@@ -102,20 +101,50 @@ export default function DashboardPage() {
 
   const router = useRouter()
 
-  // Mock user data - IN REAL APP, GET FROM SUPABASE/AUTH
+  // Fetch user data from API
   useEffect(() => {
-    const mockUser: UserData = {
-      id: 'user-123',
-      email: 'john.doe@example.com',
-      firstName: 'John',
-      lastName: 'Doe',
-      balance: 0,
-      totalDeposits: 0,
-      totalWithdrawals: 0,
-      phone: '+1 (555) 123-4567',
-      country: 'United States'
+    const fetchUserData = async () => {
+      try {
+        // Replace 'user-123' with actual user ID from auth session
+        const userId = 'user-123' // Get from Supabase auth session
+        
+        const response = await fetch('/api/user', {
+          headers: {
+            'x-user-id': userId
+          }
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          setUserData(data.user)
+        } else {
+          // If user not found in database, create a default user
+          const defaultUser: UserData = {
+            id: userId,
+            email: 'user@example.com',
+            full_name: 'User',
+            balance: 0,
+            total_deposits: 0,
+            total_withdrawals: 0
+          }
+          setUserData(defaultUser)
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error)
+        // Fallback to default user
+        const defaultUser: UserData = {
+          id: 'user-123',
+          email: 'user@example.com',
+          full_name: 'User',
+          balance: 0,
+          total_deposits: 0,
+          total_withdrawals: 0
+        }
+        setUserData(defaultUser)
+      }
     }
-    setUserData(mockUser)
+
+    fetchUserData()
   }, [])
 
   // Fetch real crypto prices
@@ -284,7 +313,6 @@ export default function DashboardPage() {
 
   // Handle logout
   const handleLogout = () => {
-    // In real app, call Supabase logout
     router.push('/')
   }
 
@@ -325,7 +353,7 @@ export default function DashboardPage() {
     </nav>
   )
 
-  if (!userData) {
+  if (!userData || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
         <div className="text-center">
@@ -335,6 +363,9 @@ export default function DashboardPage() {
       </div>
     )
   }
+
+  // Extract first name from full_name
+  const firstName = userData.full_name.split(' ')[0]
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
@@ -408,7 +439,7 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-3xl font-bold text-white">Dashboard</h1>
               <p className="text-gray-400">
-                Welcome back, {userData.firstName}!
+                Welcome back, {firstName}!
               </p>
             </div>
           </div>
@@ -498,7 +529,7 @@ export default function DashboardPage() {
             {/* User Avatar */}
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold">
-                {userData.firstName?.charAt(0)?.toUpperCase() || 'U'}
+                {firstName?.charAt(0)?.toUpperCase() || 'U'}
               </span>
             </div>
           </div>
@@ -538,7 +569,7 @@ export default function DashboardPage() {
               <ArrowUpRight className="w-5 h-5 text-blue-400" />
             </div>
             <p className="text-3xl font-bold text-white mb-2">
-              ${userData?.totalDeposits.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+              ${userData?.total_deposits.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
             </p>
             <p className="text-gray-400 text-sm">All-time deposit amount</p>
           </div>
@@ -549,7 +580,7 @@ export default function DashboardPage() {
               <ArrowDownRight className="w-5 h-5 text-red-400" />
             </div>
             <p className="text-3xl font-bold text-white mb-2">
-              ${userData?.totalWithdrawals.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+              ${userData?.total_withdrawals.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
             </p>
             <p className="text-gray-400 text-sm">All-time withdrawal amount</p>
           </div>
@@ -970,7 +1001,7 @@ export default function DashboardPage() {
     const [asset, setAsset] = useState('USD')
     const [walletAddress, setWalletAddress] = useState('')
     const [bankDetails, setBankDetails] = useState({
-      accountName: userData?.firstName + ' ' + userData?.lastName || '',
+      accountName: userData?.full_name || '',
       accountNumber: '',
       bankName: '',
       swiftCode: '',
@@ -1277,21 +1308,11 @@ export default function DashboardPage() {
           </h2>
           
           <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">First Name</label>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-400 mb-2">Full Name</label>
               <input
                 type="text"
-                value={userData?.firstName || ''}
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
-                readOnly
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Last Name</label>
-              <input
-                type="text"
-                value={userData?.lastName || ''}
+                value={userData?.full_name || ''}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
                 readOnly
               />
@@ -1306,44 +1327,6 @@ export default function DashboardPage() {
                 readOnly
               />
             </div>
-          </div>
-        </div>
-        
-        <div className="glass-effect rounded-2xl p-6 mb-8">
-          <h2 className="text-xl font-bold text-white mb-6 flex items-center">
-            <Shield className="w-5 h-5 mr-2" />
-            Security
-          </h2>
-          
-          <div className="space-y-4">
-            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">Two-Factor Authentication</p>
-                  <p className="text-gray-400 text-sm">Add an extra layer of security</p>
-                </div>
-                <span className="text-gray-400">Disabled</span>
-              </div>
-            </button>
-          </div>
-        </div>
-        
-        <div className="glass-effect rounded-2xl p-6">
-          <h2 className="text-xl font-bold text-white mb-6 flex items-center">
-            <HelpCircle className="w-5 h-5 mr-2" />
-            Support
-          </h2>
-          
-          <div className="space-y-4">
-            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">Contact Support</p>
-                  <p className="text-gray-400 text-sm">Get help from our support team</p>
-                </div>
-                <ArrowUpRight className="w-5 h-5 text-gray-400" />
-              </div>
-            </button>
           </div>
         </div>
       </div>
