@@ -9,6 +9,8 @@ import {
   Mail, Phone, MapPin, User, Shield, HelpCircle
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter } from 'next/navigation'
 
 // Define types
 interface CryptoPrice {
@@ -47,13 +49,14 @@ interface WithdrawalRequest {
 interface UserData {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  first_name: string;
+  last_name: string;
   balance: number;
-  totalDeposits: number;
-  totalWithdrawals: number;
+  total_deposits: number;
+  total_withdrawals: number;
   phone?: string;
   country?: string;
+  avatar_url?: string;
 }
 
 // Demo wallet addresses (replace with real ones)
@@ -93,37 +96,86 @@ export default function DashboardPage() {
   const [transactions, setTransactions] = useState<any[]>([])
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
   const [paymentProofPreview, setPaymentProofPreview] = useState<string | null>(null)
+  
+  const supabase = createClientComponentClient()
+  const router = useRouter()
 
-  // Mock user ID - in real app, get from auth
-  const userId = 'user-123'
-
-  // Fetch user data (real implementation)
+  // Fetch user data from Supabase
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        // In real app, fetch from your API
-        // const response = await fetch(`/api/user/${userId}`)
-        // const data = await response.json()
+        // Get current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         
-        // Mock data - replace with real API call
-        setUserData({
-          id: userId,
-          email: 'john.doe@example.com',
-          firstName: 'John',
-          lastName: 'Doe',
-          balance: 0,
-          totalDeposits: 0,
-          totalWithdrawals: 0,
-          phone: '+1 (555) 123-4567',
-          country: 'United States'
-        })
+        if (sessionError || !session) {
+          console.error('No session found:', sessionError)
+          router.push('/login')
+          return
+        }
+
+        const userId = session.user.id
+        
+        // Fetch user profile from Supabase
+        const { data: userData, error: userError } = await supabase
+          .from('profiles') // Change this to your actual table name
+          .select('*')
+          .eq('id', userId)
+          .single()
+        
+        if (userError) {
+          console.error('Error fetching user data:', userError)
+          
+          // If profile doesn't exist, create one with default values
+          const { data: newProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert([
+              {
+                id: userId,
+                email: session.user.email,
+                first_name: session.user.user_metadata?.first_name || 'User',
+                last_name: session.user.user_metadata?.last_name || '',
+                balance: 0,
+                total_deposits: 0,
+                total_withdrawals: 0,
+                phone: session.user.user_metadata?.phone || '',
+                country: session.user.user_metadata?.country || '',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }
+            ])
+            .select()
+            .single()
+          
+          if (createError) {
+            console.error('Error creating profile:', createError)
+            return
+          }
+          
+          setUserData(newProfile)
+        } else {
+          setUserData(userData)
+        }
+
+        // Fetch user transactions
+        const { data: userTransactions, error: transactionsError } = await supabase
+          .from('transactions') // Change this to your actual transactions table name
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+        
+        if (!transactionsError && userTransactions) {
+          setTransactions(userTransactions)
+        }
+
       } catch (error) {
         console.error('Error fetching user data:', error)
+      } finally {
+        setLoading(false)
       }
     }
 
     fetchUserData()
-  }, [userId])
+  }, [supabase, router])
 
   // Fetch real crypto prices
   useEffect(() => {
@@ -135,15 +187,24 @@ export default function DashboardPage() {
         const data = await response.json()
         setCryptoPrices(data)
       } catch (error) {
-        console.error('Error:', error)
-      } finally {
-        setLoading(false)
+        console.error('Error fetching crypto prices:', error)
       }
     }
+    
     fetchPrices()
     const interval = setInterval(fetchPrices, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      router.push('/login')
+    } catch (error) {
+      console.error('Error logging out:', error)
+    }
+  }
 
   // Handle file upload for payment proof
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,55 +237,92 @@ export default function DashboardPage() {
     }
   }
 
-  // Handle deposit submission
+  // Handle deposit submission with Supabase
   const handleDeposit = async (data: DepositRequest) => {
     setDepositLoading(true)
     setDepositError('')
     setDepositSuccess(false)
     
     try {
-      // Create FormData for file upload
-      const formData = new FormData()
-      formData.append('userId', data.userId)
-      formData.append('amount', data.amount.toString())
-      formData.append('asset', data.asset)
-      formData.append('paymentMethod', data.paymentMethod)
+      // Upload payment proof to Supabase Storage if exists
+      let paymentProofUrl = ''
+      if (paymentProofFile) {
+        const fileExt = paymentProofFile.name.split('.').pop()
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('payment-proofs') // Create this bucket in Supabase Storage
+          .upload(fileName, paymentProofFile)
+        
+        if (uploadError) throw uploadError
+        
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('payment-proofs')
+          .getPublicUrl(fileName)
+        
+        paymentProofUrl = publicUrl
+      }
+
+      // Insert deposit record to Supabase
+      const { data: depositData, error: depositError } = await supabase
+        .from('deposits') // Change this to your actual deposits table name
+        .insert([
+          {
+            user_id: data.userId,
+            amount: data.amount,
+            asset: data.asset,
+            payment_method: data.paymentMethod,
+            wallet_address: data.walletAddress,
+            tx_hash: data.txHash,
+            payment_proof_url: paymentProofUrl,
+            status: 'pending',
+            created_at: new Date().toISOString()
+          }
+        ])
+        .select()
+        .single()
       
-      if (data.txHash) formData.append('txHash', data.txHash)
-      if (data.walletAddress) formData.append('walletAddress', data.walletAddress)
-      if (paymentProofFile) formData.append('paymentProof', paymentProofFile)
+      if (depositError) {
+        throw new Error(depositError.message || 'Deposit failed')
+      }
       
-      const response = await fetch('/api/deposit', {
-        method: 'POST',
-        body: formData
-      })
-      
-      const result = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(result.error || 'Deposit failed')
+      // Update user balance in Supabase
+      if (userData) {
+        const newTotalDeposits = userData.total_deposits + data.amount
+        
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            total_deposits: newTotalDeposits,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', data.userId)
+        
+        if (updateError) {
+          console.error('Error updating user balance:', updateError)
+        } else {
+          // Update local state
+          setUserData({
+            ...userData,
+            total_deposits: newTotalDeposits
+          })
+        }
       }
       
       setDepositSuccess(true)
       
-      // Update user data locally
-      if (userData) {
-        setUserData({
-          ...userData,
-          totalDeposits: userData.totalDeposits + data.amount
-        })
-      }
-      
-      // Add to transactions
+      // Add to local transactions
       setTransactions(prev => [{
-        id: `deposit-${Date.now()}`,
+        id: depositData.id,
         type: 'deposit',
         asset: data.asset,
         amount: `+${data.amount}`,
         value: `$${data.amount}`,
         status: 'Pending',
         date: new Date().toISOString().split('T')[0],
-        method: data.paymentMethod === 'wire' ? 'Wire Transfer' : 'Crypto'
+        method: data.paymentMethod === 'wire' ? 'Wire Transfer' : 'Crypto',
+        created_at: new Date().toISOString()
       }, ...prev])
       
       // Reset form after success
@@ -242,7 +340,7 @@ export default function DashboardPage() {
     }
   }
 
-  // Handle withdrawal submission
+  // Handle withdrawal submission with Supabase
   const handleWithdrawal = async (data: WithdrawalRequest) => {
     setWithdrawLoading(true)
     setWithdrawError('')
@@ -256,41 +354,66 @@ export default function DashboardPage() {
     }
     
     try {
-      const response = await fetch('/api/withdraw', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-      })
+      // Insert withdrawal record to Supabase
+      const { data: withdrawalData, error: withdrawalError } = await supabase
+        .from('withdrawals') // Change this to your actual withdrawals table name
+        .insert([
+          {
+            user_id: data.userId,
+            amount: data.amount,
+            asset: data.asset,
+            wallet_address: data.walletAddress,
+            bank_details: data.bankDetails,
+            status: 'pending',
+            created_at: new Date().toISOString()
+          }
+        ])
+        .select()
+        .single()
       
-      const result = await response.json()
+      if (withdrawalError) {
+        throw new Error(withdrawalError.message || 'Withdrawal failed')
+      }
       
-      if (!response.ok) {
-        throw new Error(result.error || 'Withdrawal failed')
+      // Update user balance in Supabase
+      if (userData) {
+        const newBalance = userData.balance - data.amount
+        const newTotalWithdrawals = userData.total_withdrawals + data.amount
+        
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            balance: newBalance,
+            total_withdrawals: newTotalWithdrawals,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', data.userId)
+        
+        if (updateError) {
+          console.error('Error updating user balance:', updateError)
+        } else {
+          // Update local state
+          setUserData({
+            ...userData,
+            balance: newBalance,
+            total_withdrawals: newTotalWithdrawals
+          })
+        }
       }
       
       setWithdrawSuccess(true)
       
-      // Update user balance locally
-      if (userData) {
-        setUserData({
-          ...userData,
-          balance: userData.balance - data.amount,
-          totalWithdrawals: userData.totalWithdrawals + data.amount
-        })
-      }
-      
-      // Add to transactions
+      // Add to local transactions
       setTransactions(prev => [{
-        id: `withdraw-${Date.now()}`,
+        id: withdrawalData.id,
         type: 'withdrawal',
         asset: data.asset,
         amount: `-${data.amount}`,
         value: `-$${data.amount}`,
         status: 'Pending',
         date: new Date().toISOString().split('T')[0],
-        method: data.asset === 'USD' ? 'Bank Transfer' : 'Crypto'
+        method: data.asset === 'USD' ? 'Bank Transfer' : 'Crypto',
+        created_at: new Date().toISOString()
       }, ...prev])
       
       // Reset form after success
@@ -343,6 +466,14 @@ export default function DashboardPage() {
     </nav>
   )
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-white animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
       {/* Desktop Sidebar */}
@@ -354,7 +485,10 @@ export default function DashboardPage() {
           <span className="text-xl font-bold text-white">CryptoVault</span>
         </div>
         <NavItems />
-        <button className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5">
+        <button 
+          onClick={handleLogout}
+          className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white"
+        >
           <LogOut className="w-5 h-5" />
           <span>Logout</span>
         </button>
@@ -378,6 +512,13 @@ export default function DashboardPage() {
                 <button onClick={() => setSidebarOpen(false)}><X className="w-6 h-6 text-white" /></button>
               </div>
               <NavItems />
+              <button 
+                onClick={handleLogout}
+                className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white"
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Logout</span>
+              </button>
             </motion.aside>
           </>
         )}
@@ -394,7 +535,7 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-3xl font-bold text-white">Dashboard</h1>
               <p className="text-gray-400">
-                Welcome back, {userData ? `${userData.firstName} ${userData.lastName}` : 'User'}!
+                Welcome back, {userData ? `${userData.first_name} ${userData.last_name}` : 'User'}!
               </p>
             </div>
           </div>
@@ -409,7 +550,7 @@ export default function DashboardPage() {
             </button>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold">
-                {userData?.firstName?.charAt(0) || 'U'}{userData?.lastName?.charAt(0) || ''}
+                {userData?.first_name?.charAt(0) || 'U'}{userData?.last_name?.charAt(0) || ''}
               </span>
             </div>
           </div>
@@ -436,7 +577,7 @@ export default function DashboardPage() {
               <Eye className="w-5 h-5 text-green-400" />
             </div>
             <p className="text-3xl font-bold text-white mb-2">
-              {hideBalance ? '••••••' : `$${userData?.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}`}
+              {hideBalance ? '••••••' : `$${(userData?.balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}
             </p>
             <p className="text-gray-400 text-sm">
               {userData && userData.balance === 0 ? 'Make a deposit to get started' : 'Available for trading & withdrawal'}
@@ -449,7 +590,7 @@ export default function DashboardPage() {
               <ArrowUpRight className="w-5 h-5 text-blue-400" />
             </div>
             <p className="text-3xl font-bold text-white mb-2">
-              ${userData?.totalDeposits.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+              ${(userData?.total_deposits || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
             </p>
             <p className="text-gray-400 text-sm">All-time deposit amount</p>
           </div>
@@ -460,7 +601,7 @@ export default function DashboardPage() {
               <ArrowDownRight className="w-5 h-5 text-red-400" />
             </div>
             <p className="text-3xl font-bold text-white mb-2">
-              ${userData?.totalWithdrawals.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+              ${(userData?.total_withdrawals || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
             </p>
             <p className="text-gray-400 text-sm">All-time withdrawal amount</p>
           </div>
@@ -545,7 +686,7 @@ export default function DashboardPage() {
       }
       
       onSubmit({
-        userId,
+        userId: userData?.id || '',
         amount: parseFloat(amount),
         asset,
         paymentMethod,
@@ -894,7 +1035,7 @@ export default function DashboardPage() {
       }
       
       const data: WithdrawalRequest = {
-        userId,
+        userId: userData?.id || '',
         amount: parseFloat(amount),
         asset,
       }
@@ -1145,7 +1286,9 @@ export default function DashboardPage() {
                           {tx.status}
                         </span>
                       </td>
-                      <td className="py-4 text-gray-400">{tx.date}</td>
+                      <td className="py-4 text-gray-400">
+                        {new Date(tx.created_at).toLocaleDateString()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1196,7 +1339,7 @@ export default function DashboardPage() {
               <label className="block text-sm font-medium text-gray-400 mb-2">First Name</label>
               <input
                 type="text"
-                value={userData?.firstName || ''}
+                value={userData?.first_name || ''}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
                 readOnly
               />
@@ -1206,7 +1349,7 @@ export default function DashboardPage() {
               <label className="block text-sm font-medium text-gray-400 mb-2">Last Name</label>
               <input
                 type="text"
-                value={userData?.lastName || ''}
+                value={userData?.last_name || ''}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
                 readOnly
               />
