@@ -11,6 +11,7 @@ import {
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { supabase } from '@/lib/supabase/client' // ADD THIS IMPORT
 
 // Define types based on your Supabase schema
 interface UserProfile {
