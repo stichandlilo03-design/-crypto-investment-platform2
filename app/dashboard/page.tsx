@@ -2,249 +2,97 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  TrendingUp, 
-  TrendingDown,
-  Wallet, 
-  ArrowUpRight,
-  ArrowDownRight,
-  DollarSign,
-  PieChart,
-  Activity,
-  Settings,
-  LogOut,
-  Bell,
-  Search,
-  Plus,
-  Download,
-  Upload,
-  Eye,
-  EyeOff,
-  History,
-  UserCircle,
-  Menu,
-  X
+  TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight, DollarSign,
+  PieChart, Activity, Settings, LogOut, Bell, Search, Plus, Download, Upload,
+  Eye, EyeOff, History, UserCircle, Menu, X, Check, Clock, AlertCircle, FileText
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { useRouter } from 'next/navigation'
 
 export default function DashboardPage() {
-  const { user, profile, loading, signOut } = useAuth()
-  const router = useRouter()
   const [hideBalance, setHideBalance] = useState(false)
   const [selectedTab, setSelectedTab] = useState('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [cryptoPrices, setCryptoPrices] = useState({})
+  const [loading, setLoading] = useState(true)
 
-  // Redirect to login if not authenticated
+  // Fetch real crypto prices
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login')
+    const fetchPrices = async () => {
+      try {
+        const response = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,cardano,solana&vs_currencies=usd&include_24hr_change=true&x_cg_demo_api_key=CG-YnK9oBCYZL6hmz6g7R8HtqBm'
+        )
+        const data = await response.json()
+        setCryptoPrices(data)
+      } catch (error) {
+        console.error('Error:', error)
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [user, loading, router])
+    fetchPrices()
+    const interval = setInterval(fetchPrices, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
-  // Handle logout
-  const handleLogout = async () => {
-    await signOut()
+  // Mock user holdings - would come from database
+  const holdings = { bitcoin: 2.5847, ethereum: 15.2341, cardano: 50000, solana: 125.5 }
+  
+  const calculateBalance = () => {
+    let total = 0
+    Object.keys(holdings).forEach(coin => {
+      if (cryptoPrices[coin]) total += holdings[coin] * cryptoPrices[coin].usd
+    })
+    return total
   }
 
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    )
-  }
+  const userBalance = calculateBalance()
+  const userProfit = userBalance * 0.327 // 32.7% gain
 
-  // Don't render if no user
-  if (!user) {
-    return null
-  }
-
-  // Get user's name from profile or email
-  const getUserName = () => {
-    if (profile?.full_name) {
-      return profile.full_name.split(' ')[0]
-    }
-    if (user?.email) {
-      return user.email.split('@')[0]
-    }
-    return 'User'
-  }
-
-  const getUserInitials = () => {
-    if (profile?.full_name) {
-      const names = profile.full_name.split(' ')
-      return names.map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
-    }
-    if (user?.email) {
-      return user.email.slice(0, 2).toUpperCase()
-    }
-    return 'U'
-  }
+  const notifications = [
+    { id: 1, type: 'deposit', title: 'Deposit Approved', message: 'Your BTC deposit of 0.5 BTC approved', time: '2h ago', read: false },
+    { id: 2, type: 'profit', title: 'Portfolio Up 5%', message: 'Your portfolio gained $9,850', time: '4h ago', read: false },
+    { id: 3, type: 'withdraw', title: 'Withdrawal Pending', message: 'Withdrawal under review', time: '1d ago', read: true },
+  ]
 
   const portfolioData = [
-    { 
-      name: 'Bitcoin', 
-      symbol: 'BTC', 
-      amount: '2.5847',
-      value: '$105,234.50',
-      change: '+12.34%',
-      changeValue: '+$13,456',
-      trend: 'up',
-      color: 'from-orange-500 to-yellow-500',
-      sparkline: [40, 45, 42, 48, 50, 55, 58, 60]
-    },
-    { 
-      name: 'Ethereum', 
-      symbol: 'ETH', 
-      amount: '15.2341',
-      value: '$48,723.40',
-      change: '+8.67%',
-      changeValue: '+$3,890',
-      trend: 'up',
-      color: 'from-blue-500 to-purple-500',
-      sparkline: [30, 32, 35, 33, 38, 40, 42, 45]
-    },
-    { 
-      name: 'Cardano', 
-      symbol: 'ADA', 
-      amount: '50000',
-      value: '$25,500.00',
-      change: '+15.23%',
-      changeValue: '+$3,367',
-      trend: 'up',
-      color: 'from-green-500 to-emerald-500',
-      sparkline: [20, 22, 21, 25, 28, 30, 32, 35]
-    },
-    { 
-      name: 'Solana', 
-      symbol: 'SOL', 
-      amount: '125.5',
-      value: '$18,825.00',
-      change: '-2.45%',
-      changeValue: '-$473',
-      trend: 'down',
-      color: 'from-purple-500 to-pink-500',
-      sparkline: [35, 33, 30, 28, 29, 27, 26, 25]
-    }
-  ]
-
-  const recentTransactions = [
-    {
-      type: 'deposit',
-      asset: 'Bitcoin',
-      symbol: 'BTC',
-      amount: '+0.5 BTC',
-      value: '+$20,450',
-      date: '2 hours ago',
-      status: 'completed'
-    },
-    {
-      type: 'withdraw',
-      asset: 'Ethereum',
-      symbol: 'ETH',
-      amount: '-2.0 ETH',
-      value: '-$6,400',
-      date: '5 hours ago',
-      status: 'completed'
-    },
-    {
-      type: 'trade',
-      asset: 'Cardano',
-      symbol: 'ADA',
-      amount: '+5000 ADA',
-      value: '+$2,550',
-      date: '1 day ago',
-      status: 'completed'
-    },
-    {
-      type: 'deposit',
-      asset: 'Solana',
-      symbol: 'SOL',
-      amount: '+25 SOL',
-      value: '+$3,750',
-      date: '2 days ago',
-      status: 'pending'
-    }
-  ]
-
-  const quickActions = [
-    { icon: <Upload className="w-5 h-5 sm:w-6 sm:h-6" />, label: 'Deposit', color: 'from-green-500 to-emerald-500' },
-    { icon: <Download className="w-5 h-5 sm:w-6 sm:h-6" />, label: 'Withdraw', color: 'from-red-500 to-pink-500' },
-    { icon: <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6" />, label: 'Buy', color: 'from-blue-500 to-cyan-500' },
-    { icon: <ArrowDownRight className="w-5 h-5 sm:w-6 sm:h-6" />, label: 'Sell', color: 'from-orange-500 to-yellow-500' }
-  ]
+    { name: 'Bitcoin', symbol: 'BTC', amount: 2.5847, coinGeckoId: 'bitcoin', color: 'from-orange-500 to-yellow-500' },
+    { name: 'Ethereum', symbol: 'ETH', amount: 15.2341, coinGeckoId: 'ethereum', color: 'from-blue-500 to-purple-500' },
+    { name: 'Cardano', symbol: 'ADA', amount: 50000, coinGeckoId: 'cardano', color: 'from-green-500 to-emerald-500' },
+    { name: 'Solana', symbol: 'SOL', amount: 125.5, coinGeckoId: 'solana', color: 'from-purple-500 to-pink-500' },
+  ].map(asset => {
+    const price = cryptoPrices[asset.coinGeckoId]
+    const value = price ? asset.amount * price.usd : 0
+    const change = price ? price.usd_24h_change : 0
+    return { ...asset, value, change, trend: change >= 0 ? 'up' : 'down' }
+  })
 
   const NavItems = () => (
     <nav className="space-y-2">
-      <button
-        onClick={() => { setSelectedTab('overview'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'overview' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <PieChart className="w-5 h-5" />
-        <span className="font-medium">Overview</span>
-      </button>
-      <button
-        onClick={() => { setSelectedTab('portfolio'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'portfolio' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <Wallet className="w-5 h-5" />
-        <span className="font-medium">Portfolio</span>
-      </button>
-      <button
-        onClick={() => { setSelectedTab('transactions'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'transactions' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <History className="w-5 h-5" />
-        <span className="font-medium">Transactions</span>
-      </button>
-      <button
-        onClick={() => { setSelectedTab('markets'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'markets' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <Activity className="w-5 h-5" />
-        <span className="font-medium">Markets</span>
-      </button>
-      <button
-        onClick={() => { setSelectedTab('profile'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'profile' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <UserCircle className="w-5 h-5" />
-        <span className="font-medium">Profile</span>
-      </button>
-      <button
-        onClick={() => { setSelectedTab('settings'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'settings' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <Settings className="w-5 h-5" />
-        <span className="font-medium">Settings</span>
-      </button>
+      {[
+        { id: 'overview', icon: PieChart, label: 'Overview' },
+        { id: 'portfolio', icon: Wallet, label: 'Portfolio' },
+        { id: 'transactions', icon: History, label: 'Transactions' },
+        { id: 'markets', icon: Activity, label: 'Markets' },
+        { id: 'deposit', icon: Upload, label: 'Deposit', highlight: true },
+        { id: 'withdraw', icon: Download, label: 'Withdraw' },
+        { id: 'profile', icon: UserCircle, label: 'Profile' },
+        { id: 'settings', icon: Settings, label: 'Settings' }
+      ].map(item => (
+        <button
+          key={item.id}
+          onClick={() => { setSelectedTab(item.id); setSidebarOpen(false) }}
+          className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
+            selectedTab === item.id ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 
+            item.highlight ? 'text-green-400 hover:bg-green-500/10' :
+            'text-gray-400 hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          <item.icon className="w-5 h-5" />
+          <span className="font-medium">{item.label}</span>
+        </button>
+      ))}
     </nav>
   )
 
@@ -252,311 +100,353 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40">
-        <Link href="/" className="flex items-center space-x-2 mb-8">
+        <div className="flex items-center space-x-2 mb-8">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
             <Wallet className="w-6 h-6 text-white" />
           </div>
-          <span className="text-xl font-display font-bold text-white">CryptoVault</span>
-        </Link>
-
-        <NavItems />
-
-        <div className="absolute bottom-6 left-6 right-6">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-          >
-            <LogOut className="w-5 h-5" />
-            <span className="font-medium">Logout</span>
-          </button>
+          <span className="text-xl font-bold text-white">CryptoVault</span>
         </div>
+        <NavItems />
+        <button className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5">
+          <LogOut className="w-5 h-5" />
+          <span>Logout</span>
+        </button>
       </aside>
 
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden fixed inset-0 bg-black/50 z-40"
-            />
-            <motion.aside
-              initial={{ x: -300 }}
-              animate={{ x: 0 }}
-              exit={{ x: -300 }}
-              className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-40" />
+            <motion.aside initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }}
+              className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50">
               <div className="flex items-center justify-between mb-8">
-                <Link href="/" className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
                     <Wallet className="w-6 h-6 text-white" />
                   </div>
-                  <span className="text-xl font-display font-bold text-white">CryptoVault</span>
-                </Link>
-                <button onClick={() => setSidebarOpen(false)} className="text-white">
-                  <X className="w-6 h-6" />
-                </button>
+                  <span className="text-xl font-bold text-white">CryptoVault</span>
+                </div>
+                <button onClick={() => setSidebarOpen(false)}><X className="w-6 h-6 text-white" /></button>
               </div>
-
               <NavItems />
-
-              <div className="absolute bottom-6 left-6 right-6">
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-                >
-                  <LogOut className="w-5 h-5" />
-                  <span className="font-medium">Logout</span>
-                </button>
-              </div>
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className="lg:ml-64 p-4 sm:p-6 lg:p-8">
+      <main className="lg:ml-64 p-4 sm:p-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+        <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl glass-effect hover:bg-white/10"
-            >
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-xl glass-effect">
               <Menu className="w-6 h-6 text-white" />
             </button>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-display font-bold text-white mb-1">
-                Welcome back, {getUserName()}!
-              </h1>
-              <p className="text-sm sm:text-base text-gray-400">Here's what's happening with your investments today</p>
+              <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+              <p className="text-gray-400">Welcome back!</p>
             </div>
           </div>
-
-          <div className="flex items-center space-x-3 sm:space-x-4">
-            <div className="hidden sm:block relative flex-1 sm:flex-none">
-              <input
-                type="search"
-                placeholder="Search..."
-                className="w-full sm:w-64 pl-10 pr-4 py-2.5 rounded-xl glass-effect border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
-              />
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            </div>
-            
-            <button className="p-2.5 rounded-xl glass-effect hover:bg-white/10 transition-all relative">
+          <div className="flex items-center space-x-4">
+            <button onClick={() => setNotificationsOpen(!notificationsOpen)} 
+              className="p-2.5 rounded-xl glass-effect hover:bg-white/10 relative">
               <Bell className="w-5 h-5 text-white" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              {notifications.filter(n => !n.read).length > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              )}
             </button>
-
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center cursor-pointer">
-              <span className="text-white font-bold text-sm">{getUserInitials()}</span>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <span className="text-white font-bold">U</span>
             </div>
           </div>
         </div>
 
-        {/* Portfolio Overview Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-4 sm:p-6 rounded-2xl glass-effect hover:bg-white/5 transition-all"
-          >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <span className="text-gray-400 text-xs sm:text-sm font-medium">Total Balance</span>
-              <button onClick={() => setHideBalance(!hideBalance)} className="text-gray-400 hover:text-white">
-                {hideBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              {hideBalance ? '••••••' : '$198,282.90'}
-            </div>
-            <div className="flex items-center text-green-400 text-xs sm:text-sm">
-              <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              <span>+24.5% ($48,902)</span>
-            </div>
-          </motion.div>
+        {/* Notification Panel */}
+        <AnimatePresence>
+          {notificationsOpen && (
+            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+              className="fixed top-20 right-4 w-96 glass-effect rounded-2xl p-4 z-50 max-h-96 overflow-y-auto">
+              <h3 className="text-lg font-bold text-white mb-4">Notifications</h3>
+              {notifications.map(n => (
+                <div key={n.id} className={`p-3 rounded-xl mb-2 ${n.read ? 'bg-white/5' : 'bg-purple-500/10'}`}>
+                  <div className="flex items-start space-x-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      n.type === 'deposit' ? 'bg-green-500/20 text-green-400' :
+                      n.type === 'withdraw' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'
+                    }`}>
+                      {n.type === 'deposit' ? <Check className="w-4 h-4" /> :
+                       n.type === 'withdraw' ? <Clock className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white text-sm font-semibold">{n.title}</p>
+                      <p className="text-gray-400 text-xs">{n.message}</p>
+                      <p className="text-gray-500 text-xs mt-1">{n.time}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="p-4 sm:p-6 rounded-2xl glass-effect hover:bg-white/5 transition-all"
-          >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <span className="text-gray-400 text-xs sm:text-sm font-medium">Total Profit/Loss</span>
-              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              {hideBalance ? '••••••' : '+$48,902'}
-            </div>
-            <div className="flex items-center text-green-400 text-xs sm:text-sm">
-              <ArrowUpRight className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              <span>+24.5% This month</span>
-            </div>
-          </motion.div>
+        {/* Content Tabs */}
+        {selectedTab === 'overview' && <OverviewTab />}
+        {selectedTab === 'deposit' && <DepositTab />}
+        {selectedTab === 'withdraw' && <WithdrawTab />}
+        {selectedTab === 'transactions' && <TransactionsTab />}
+        {selectedTab === 'markets' && <MarketsTab prices={cryptoPrices} />}
+        {selectedTab === 'portfolio' && <PortfolioTab data={portfolioData} hide={hideBalance} />}
+      </main>
+    </div>
+  )
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="p-4 sm:p-6 rounded-2xl glass-effect hover:bg-white/5 transition-all"
-          >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <span className="text-gray-400 text-xs sm:text-sm font-medium">Total Invested</span>
-              <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              {hideBalance ? '••••••' : '$149,380'}
-            </div>
-            <div className="flex items-center text-gray-400 text-xs sm:text-sm">
-              <span>Across 4 assets</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="p-4 sm:p-6 rounded-2xl glass-effect hover:bg-white/5 transition-all"
-          >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <span className="text-gray-400 text-xs sm:text-sm font-medium">24h Change</span>
-              <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              {hideBalance ? '••••••' : '+$4,823'}
-            </div>
-            <div className="flex items-center text-green-400 text-xs sm:text-sm">
-              <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              <span>+2.43%</span>
-            </div>
-          </motion.div>
+  function OverviewTab() {
+    return (
+      <>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatCard title="Total Balance" value={`$${userBalance.toLocaleString(undefined, {maximumFractionDigits: 2})}`} 
+            change="+32.7%" icon={<Eye />} />
+          <StatCard title="Total Profit" value={`+$${userProfit.toLocaleString(undefined, {maximumFractionDigits: 2})}`} 
+            change="+32.7% ROI" icon={<DollarSign />} color="green" />
+          <StatCard title="Assets" value="4" subtitle="BTC, ETH, ADA, SOL" icon={<Wallet />} color="blue" />
+          <StatCard title="24h Change" value={cryptoPrices.bitcoin ? `${cryptoPrices.bitcoin.usd_24h_change.toFixed(2)}%` : '...'} 
+            icon={<Activity />} color="purple" />
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          {quickActions.map((action, index) => (
-            <motion.button
-              key={action.label}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.05 }}
-              className="p-3 sm:p-4 rounded-xl glass-effect hover:bg-white/10 transition-all group"
-            >
-              <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center mb-2 sm:mb-3 group-hover:scale-110 transition-transform mx-auto`}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          {[
+            { icon: <Upload />, label: 'Deposit', color: 'from-green-500 to-emerald-500', tab: 'deposit' },
+            { icon: <Download />, label: 'Withdraw', color: 'from-red-500 to-pink-500', tab: 'withdraw' },
+            { icon: <ArrowUpRight />, label: 'Buy', color: 'from-blue-500 to-cyan-500', tab: 'markets' },
+            { icon: <ArrowDownRight />, label: 'Sell', color: 'from-orange-500 to-yellow-500', tab: 'markets' }
+          ].map((action, i) => (
+            <button key={i} onClick={() => setSelectedTab(action.tab)}
+              className="p-4 rounded-xl glass-effect hover:bg-white/10 group">
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center mb-3 mx-auto group-hover:scale-110 transition-transform`}>
                 {action.icon}
               </div>
-              <span className="text-white font-medium text-sm sm:text-base">{action.label}</span>
-            </motion.button>
+              <span className="text-white font-medium">{action.label}</span>
+            </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-          {/* Portfolio Assets */}
-          <div className="lg:col-span-2">
-            <div className="glass-effect rounded-2xl p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-                <h2 className="text-xl sm:text-2xl font-display font-bold text-white">Your Portfolio</h2>
-                <button className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-medium hover:shadow-lg transition-all">
-                  <Plus className="w-4 h-4 inline mr-1" />
-                  Add Asset
-                </button>
-              </div>
-
-              <div className="space-y-3 sm:space-y-4">
-                {portfolioData.map((asset, index) => (
-                  <motion.div
-                    key={asset.symbol}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="p-3 sm:p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between mb-3 sm:mb-0">
-                      <div className="flex items-center space-x-3 sm:space-x-4">
-                        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br ${asset.color}`}></div>
-                        <div>
-                          <div className="font-semibold text-white text-base sm:text-lg">{asset.name}</div>
-                          <div className="text-xs sm:text-sm text-gray-400">{asset.amount} {asset.symbol}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="text-right">
-                        <div className="font-bold text-white text-base sm:text-lg mb-1">{hideBalance ? '••••••' : asset.value}</div>
-                        <div className={`text-xs sm:text-sm font-medium flex items-center justify-end ${asset.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                          {asset.trend === 'up' ? <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> : <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />}
-                          {asset.change}
-                        </div>
-                      </div>
+        <div className="grid lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 glass-effect rounded-2xl p-6">
+            <h2 className="text-2xl font-bold text-white mb-6">Your Portfolio</h2>
+            {portfolioData.map((asset, i) => (
+              <div key={i} className="p-4 rounded-xl bg-white/5 hover:bg-white/10 mb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${asset.color}`}></div>
+                    <div>
+                      <p className="text-white font-semibold">{asset.name}</p>
+                      <p className="text-gray-400 text-sm">{asset.amount} {asset.symbol}</p>
                     </div>
-
-                    {/* Mini sparkline */}
-                    <div className="mt-3 sm:mt-4 h-10 sm:h-12 flex items-end space-x-1">
-                      {asset.sparkline.map((value, i) => (
-                        <div
-                          key={i}
-                          className={`flex-1 rounded-t ${asset.trend === 'up' ? 'bg-green-500/50' : 'bg-red-500/50'}`}
-                          style={{ height: `${(value / Math.max(...asset.sparkline)) * 100}%` }}
-                        ></div>
-                      ))}
-                    </div>
-                  </motion.div>
-                ))}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-white font-bold">${asset.value.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
+                    <p className={`text-sm ${asset.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
+                      {asset.change.toFixed(2)}%
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
-
-          {/* Recent Transactions */}
-          <div>
-            <div className="glass-effect rounded-2xl p-4 sm:p-6">
-              <h2 className="text-lg sm:text-xl font-display font-bold text-white mb-4 sm:mb-6">Recent Activity</h2>
-              
-              <div className="space-y-3 sm:space-y-4">
-                {recentTransactions.map((tx, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-all"
-                  >
-                    <div className="flex items-center space-x-2 sm:space-x-3">
-                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${
-                        tx.type === 'deposit' ? 'bg-green-500/20 text-green-400' :
-                        tx.type === 'withdraw' ? 'bg-red-500/20 text-red-400' :
-                        'bg-blue-500/20 text-blue-400'
-                      }`}>
-                        {tx.type === 'deposit' ? <ArrowDownRight className="w-4 h-4 sm:w-5 sm:h-5" /> :
-                         tx.type === 'withdraw' ? <ArrowUpRight className="w-4 h-4 sm:w-5 sm:h-5" /> :
-                         <Activity className="w-4 h-4 sm:w-5 sm:h-5" />}
-                      </div>
-                      <div>
-                        <div className="text-white font-medium text-xs sm:text-sm">{tx.asset}</div>
-                        <div className="text-gray-400 text-[10px] sm:text-xs">{tx.date}</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`font-semibold text-xs sm:text-sm ${
-                        tx.amount.startsWith('+') ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {tx.amount}
-                      </div>
-                      <div className="text-gray-400 text-[10px] sm:text-xs">{tx.value}</div>
-                    </div>
-                  </motion.div>
-                ))}
+          
+          <div className="glass-effect rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-6">Recent Activity</h2>
+            {notifications.map((n, i) => (
+              <div key={i} className="p-3 rounded-xl bg-white/5 mb-3">
+                <p className="text-white text-sm font-semibold">{n.title}</p>
+                <p className="text-gray-400 text-xs">{n.message}</p>
+                <p className="text-gray-500 text-xs mt-1">{n.time}</p>
               </div>
+            ))}
+          </div>
+        </div>
+      </>
+    )
+  }
 
-              <button className="w-full mt-4 py-2.5 rounded-xl glass-effect hover:bg-white/10 text-white text-xs sm:text-sm font-medium transition-all">
-                View All Transactions
-              </button>
+  function DepositTab() {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-8">Deposit Funds</h1>
+        <div className="glass-effect rounded-2xl p-6">
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            <DepositMethod icon="₿" title="Bitcoin (BTC)" desc="Send BTC to wallet" color="from-orange-500 to-yellow-500" />
+            <DepositMethod icon="$" title="Wire Transfer" desc="Bank transfer (USD, EUR)" color="from-blue-500 to-cyan-500" />
+          </div>
+          <div className="p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+            <div className="flex items-start space-x-3">
+              <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
+              <div>
+                <h4 className="text-yellow-400 font-semibold mb-1">Important</h4>
+                <p className="text-gray-300 text-sm">All deposits require admin approval. Upload proof of payment after depositing. Processing: 24-48 hours.</p>
+              </div>
             </div>
           </div>
         </div>
-      </main>
+      </div>
+    )
+  }
+
+  function WithdrawTab() {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-8">Withdraw Funds</h1>
+        <div className="glass-effect rounded-2xl p-6">
+          <div className="space-y-4">
+            <FormField label="Select Asset" type="select" options={['Bitcoin (BTC)', 'Ethereum (ETH)', 'Wire Transfer (USD)']} />
+            <FormField label="Amount" type="number" placeholder="0.00" />
+            <FormField label="Wallet Address / Account" type="text" placeholder="Enter destination" />
+            <button className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-medium">
+              Request Withdrawal
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function TransactionsTab() {
+    const txns = [
+      { type: 'Deposit', asset: 'BTC', amount: '+0.5', value: '$20,450', status: 'Completed', date: '2024-01-10' },
+      { type: 'Withdrawal', asset: 'ETH', amount: '-2.0', value: '-$6,400', status: 'Pending', date: '2024-01-09' },
+      { type: 'Buy', asset: 'ADA', amount: '+5000', value: '$2,550', status: 'Completed', date: '2024-01-08' },
+    ]
+    return (
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-8">Transaction History</h1>
+        <div className="glass-effect rounded-2xl p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left py-3 text-gray-400">Type</th>
+                  <th className="text-left py-3 text-gray-400">Asset</th>
+                  <th className="text-left py-3 text-gray-400">Amount</th>
+                  <th className="text-left py-3 text-gray-400">Value</th>
+                  <th className="text-left py-3 text-gray-400">Status</th>
+                  <th className="text-left py-3 text-gray-400">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {txns.map((tx, i) => (
+                  <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="py-4 text-white">{tx.type}</td>
+                    <td className="py-4 text-white">{tx.asset}</td>
+                    <td className={`py-4 ${tx.amount.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>{tx.amount}</td>
+                    <td className="py-4 text-white">{tx.value}</td>
+                    <td className="py-4">
+                      <span className={`px-3 py-1 rounded-full text-xs ${tx.status === 'Completed' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                        {tx.status}
+                      </span>
+                    </td>
+                    <td className="py-4 text-gray-400">{tx.date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function MarketsTab({ prices }) {
+    return (
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-8">Crypto Markets</h1>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {Object.entries(prices).map(([coin, data]) => (
+            <div key={coin} className="glass-effect rounded-2xl p-6 hover:bg-white/5">
+              <h3 className="text-xl font-bold text-white capitalize mb-2">{coin}</h3>
+              <p className="text-3xl font-bold text-white mb-2">${data.usd?.toLocaleString()}</p>
+              <p className={`text-sm ${data.usd_24h_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {data.usd_24h_change?.toFixed(2)}% 24h
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  function PortfolioTab({ data, hide }) {
+    return (
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-8">Portfolio Details</h1>
+        <div className="grid gap-6">
+          {data.map((asset, i) => (
+            <div key={i} className="glass-effect rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-4">
+                  <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${asset.color}`}></div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-white">{asset.name}</h3>
+                    <p className="text-gray-400">{asset.amount} {asset.symbol}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-white">${asset.value.toLocaleString()}</p>
+                  <p className={`text-lg ${asset.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
+                    {asset.change.toFixed(2)}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+}
+
+function StatCard({ title, value, change, subtitle, icon, color = 'green' }) {
+  return (
+    <div className="p-6 rounded-2xl glass-effect hover:bg-white/5">
+      <div className="flex justify-between mb-4">
+        <span className="text-gray-400 text-sm">{title}</span>
+        <div className={`text-${color}-400`}>{icon}</div>
+      </div>
+      <p className="text-3xl font-bold text-white mb-2">{value}</p>
+      {change && <p className="text-green-400 text-sm">{change}</p>}
+      {subtitle && <p className="text-gray-400 text-sm">{subtitle}</p>}
+    </div>
+  )
+}
+
+function DepositMethod({ icon, title, desc, color }) {
+  return (
+    <div className="p-6 bg-white/5 rounded-xl hover:bg-white/10 cursor-pointer border-2 border-transparent hover:border-purple-500">
+      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center mb-4 text-2xl`}>
+        {icon}
+      </div>
+      <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
+      <p className="text-gray-400 text-sm mb-4">{desc}</p>
+      <button className={`w-full py-2 rounded-lg bg-gradient-to-r ${color} text-white font-medium`}>
+        Deposit
+      </button>
+    </div>
+  )
+}
+
+function FormField({ label, type, placeholder, options }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-400 mb-2">{label}</label>
+      {type === 'select' ? (
+        <select className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white">
+          {options.map(opt => <option key={opt}>{opt}</option>)}
+        </select>
+      ) : (
+        <input type={type} placeholder={placeholder} 
+          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500" />
+      )}
     </div>
   )
 }
