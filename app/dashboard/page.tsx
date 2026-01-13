@@ -12,7 +12,17 @@ import { useState, useEffect, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
 
-// Define types
+// Define types based on your Supabase schema
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  kyc_verified: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 interface CryptoPrice {
   usd: number;
   usd_24h_change: number;
@@ -44,19 +54,6 @@ interface WithdrawalRequest {
     swiftCode: string;
     country: string;
   };
-}
-
-interface UserData {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  balance: number;
-  total_deposits: number;
-  total_withdrawals: number;
-  phone?: string;
-  country?: string;
-  avatar_url?: string;
 }
 
 // Demo wallet addresses (replace with real ones)
@@ -92,8 +89,10 @@ export default function DashboardPage() {
   const [withdrawSuccess, setWithdrawSuccess] = useState(false)
   const [depositError, setDepositError] = useState('')
   const [withdrawError, setWithdrawError] = useState('')
-  const [userData, setUserData] = useState<UserData | null>(null)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [userPortfolio, setUserPortfolio] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
+  const [notifications, setNotifications] = useState<any[]>([])
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
   const [paymentProofPreview, setPaymentProofPreview] = useState<string | null>(null)
   
@@ -116,55 +115,50 @@ export default function DashboardPage() {
         const userId = session.user.id
         
         // Fetch user profile from Supabase
-        const { data: userData, error: userError } = await supabase
-          .from('profiles') // Change this to your actual table name
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
           .select('*')
           .eq('id', userId)
           .single()
         
-        if (userError) {
-          console.error('Error fetching user data:', userError)
-          
-          // If profile doesn't exist, create one with default values
-          const { data: newProfile, error: createError } = await supabase
-            .from('profiles')
-            .insert([
-              {
-                id: userId,
-                email: session.user.email,
-                first_name: session.user.user_metadata?.first_name || 'User',
-                last_name: session.user.user_metadata?.last_name || '',
-                balance: 0,
-                total_deposits: 0,
-                total_withdrawals: 0,
-                phone: session.user.user_metadata?.phone || '',
-                country: session.user.user_metadata?.country || '',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              }
-            ])
-            .select()
-            .single()
-          
-          if (createError) {
-            console.error('Error creating profile:', createError)
-            return
-          }
-          
-          setUserData(newProfile)
-        } else {
-          setUserData(userData)
+        if (profileError) {
+          console.error('Error fetching user profile:', profileError)
+          return
+        }
+        
+        setUserProfile(profileData)
+
+        // Fetch user portfolio
+        const { data: portfolioData, error: portfolioError } = await supabase
+          .from('user_portfolio')
+          .select('*')
+          .eq('user_id', userId)
+        
+        if (!portfolioError && portfolioData) {
+          setUserPortfolio(portfolioData)
         }
 
         // Fetch user transactions
-        const { data: userTransactions, error: transactionsError } = await supabase
-          .from('transactions') // Change this to your actual transactions table name
+        const { data: transactionsData, error: transactionsError } = await supabase
+          .from('transactions')
           .select('*')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
         
-        if (!transactionsError && userTransactions) {
-          setTransactions(userTransactions)
+        if (!transactionsError && transactionsData) {
+          setTransactions(transactionsData)
+        }
+
+        // Fetch user notifications
+        const { data: notificationsData, error: notificationsError } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(10)
+        
+        if (!notificationsError && notificationsData) {
+          setNotifications(notificationsData)
         }
 
       } catch (error) {
@@ -195,6 +189,32 @@ export default function DashboardPage() {
     const interval = setInterval(fetchPrices, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  // Calculate total balance from portfolio
+  const calculateTotalBalance = () => {
+    if (!userPortfolio.length) return 0
+    
+    return userPortfolio.reduce((total, item) => {
+      const assetPrice = cryptoPrices[item.asset.toLowerCase()]?.usd || 0
+      return total + (Number(item.amount) * assetPrice)
+    }, 0)
+  }
+
+  // Calculate total deposits
+  const calculateTotalDeposits = () => {
+    const depositTransactions = transactions.filter(tx => 
+      tx.type === 'deposit' && tx.status === 'approved'
+    )
+    return depositTransactions.reduce((total, tx) => total + Number(tx.amount), 0)
+  }
+
+  // Calculate total withdrawals
+  const calculateTotalWithdrawals = () => {
+    const withdrawalTransactions = transactions.filter(tx => 
+      tx.type === 'withdraw' && tx.status === 'approved'
+    )
+    return withdrawalTransactions.reduce((total, tx) => total + Number(tx.amount), 0)
+  }
 
   // Handle logout
   const handleLogout = async () => {
@@ -251,7 +271,7 @@ export default function DashboardPage() {
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
         
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('payment-proofs') // Create this bucket in Supabase Storage
+          .from('payment-proofs')
           .upload(fileName, paymentProofFile)
         
         if (uploadError) throw uploadError
@@ -266,17 +286,17 @@ export default function DashboardPage() {
 
       // Insert deposit record to Supabase
       const { data: depositData, error: depositError } = await supabase
-        .from('deposits') // Change this to your actual deposits table name
+        .from('transactions')
         .insert([
           {
             user_id: data.userId,
-            amount: data.amount,
+            type: 'deposit',
             asset: data.asset,
-            payment_method: data.paymentMethod,
-            wallet_address: data.walletAddress,
-            tx_hash: data.txHash,
-            payment_proof_url: paymentProofUrl,
+            amount: data.amount,
+            value_usd: data.amount,
             status: 'pending',
+            payment_proof_url: paymentProofUrl,
+            wallet_address: data.walletAddress,
             created_at: new Date().toISOString()
           }
         ])
@@ -287,41 +307,32 @@ export default function DashboardPage() {
         throw new Error(depositError.message || 'Deposit failed')
       }
       
-      // Update user balance in Supabase
-      if (userData) {
-        const newTotalDeposits = userData.total_deposits + data.amount
-        
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({
-            total_deposits: newTotalDeposits,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', data.userId)
-        
-        if (updateError) {
-          console.error('Error updating user balance:', updateError)
-        } else {
-          // Update local state
-          setUserData({
-            ...userData,
-            total_deposits: newTotalDeposits
-          })
-        }
-      }
+      // Create notification for deposit request
+      await supabase
+        .from('notifications')
+        .insert([
+          {
+            user_id: data.userId,
+            type: 'deposit',
+            title: 'Deposit Request Submitted',
+            message: `Your deposit request of $${data.amount} ${data.asset} has been submitted and is pending approval.`,
+            created_at: new Date().toISOString()
+          }
+        ])
       
       setDepositSuccess(true)
       
       // Add to local transactions
       setTransactions(prev => [{
         id: depositData.id,
+        user_id: data.userId,
         type: 'deposit',
         asset: data.asset,
-        amount: `+${data.amount}`,
-        value: `$${data.amount}`,
-        status: 'Pending',
-        date: new Date().toISOString().split('T')[0],
-        method: data.paymentMethod === 'wire' ? 'Wire Transfer' : 'Crypto',
+        amount: data.amount,
+        value_usd: data.amount,
+        status: 'pending',
+        payment_proof_url: paymentProofUrl,
+        wallet_address: data.walletAddress,
         created_at: new Date().toISOString()
       }, ...prev])
       
@@ -346,8 +357,9 @@ export default function DashboardPage() {
     setWithdrawError('')
     setWithdrawSuccess(false)
     
-    // Check if user has sufficient balance
-    if (userData && userData.balance < data.amount) {
+    // Check if user has sufficient balance in portfolio
+    const totalBalance = calculateTotalBalance()
+    if (data.amount > totalBalance) {
       setWithdrawError('Insufficient balance')
       setWithdrawLoading(false)
       return
@@ -356,15 +368,16 @@ export default function DashboardPage() {
     try {
       // Insert withdrawal record to Supabase
       const { data: withdrawalData, error: withdrawalError } = await supabase
-        .from('withdrawals') // Change this to your actual withdrawals table name
+        .from('transactions')
         .insert([
           {
             user_id: data.userId,
-            amount: data.amount,
+            type: 'withdraw',
             asset: data.asset,
-            wallet_address: data.walletAddress,
-            bank_details: data.bankDetails,
+            amount: data.amount,
+            value_usd: data.amount,
             status: 'pending',
+            wallet_address: data.walletAddress,
             created_at: new Date().toISOString()
           }
         ])
@@ -375,44 +388,31 @@ export default function DashboardPage() {
         throw new Error(withdrawalError.message || 'Withdrawal failed')
       }
       
-      // Update user balance in Supabase
-      if (userData) {
-        const newBalance = userData.balance - data.amount
-        const newTotalWithdrawals = userData.total_withdrawals + data.amount
-        
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({
-            balance: newBalance,
-            total_withdrawals: newTotalWithdrawals,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', data.userId)
-        
-        if (updateError) {
-          console.error('Error updating user balance:', updateError)
-        } else {
-          // Update local state
-          setUserData({
-            ...userData,
-            balance: newBalance,
-            total_withdrawals: newTotalWithdrawals
-          })
-        }
-      }
+      // Create notification for withdrawal request
+      await supabase
+        .from('notifications')
+        .insert([
+          {
+            user_id: data.userId,
+            type: 'withdraw',
+            title: 'Withdrawal Request Submitted',
+            message: `Your withdrawal request of $${data.amount} ${data.asset} has been submitted and is pending approval.`,
+            created_at: new Date().toISOString()
+          }
+        ])
       
       setWithdrawSuccess(true)
       
       // Add to local transactions
       setTransactions(prev => [{
         id: withdrawalData.id,
-        type: 'withdrawal',
+        user_id: data.userId,
+        type: 'withdraw',
         asset: data.asset,
-        amount: `-${data.amount}`,
-        value: `-$${data.amount}`,
-        status: 'Pending',
-        date: new Date().toISOString().split('T')[0],
-        method: data.asset === 'USD' ? 'Bank Transfer' : 'Crypto',
+        amount: data.amount,
+        value_usd: data.amount,
+        status: 'pending',
+        wallet_address: data.walletAddress,
         created_at: new Date().toISOString()
       }, ...prev])
       
@@ -472,6 +472,12 @@ export default function DashboardPage() {
         <Loader2 className="w-8 h-8 text-white animate-spin" />
       </div>
     )
+  }
+
+  // Extract first name from full_name
+  const getFirstName = () => {
+    if (!userProfile?.full_name) return 'User'
+    return userProfile.full_name.split(' ')[0]
   }
 
   return (
@@ -535,7 +541,7 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-3xl font-bold text-white">Dashboard</h1>
               <p className="text-gray-400">
-                Welcome back, {userData ? `${userData.first_name} ${userData.last_name}` : 'User'}!
+                Welcome back, {getFirstName()}!
               </p>
             </div>
           </div>
@@ -547,27 +553,104 @@ export default function DashboardPage() {
             <button onClick={() => setNotificationsOpen(!notificationsOpen)} 
               className="p-2.5 rounded-xl glass-effect hover:bg-white/10 relative">
               <Bell className="w-5 h-5 text-white" />
+              {notifications.filter(n => !n.read).length > 0 && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
+              )}
             </button>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold">
-                {userData?.first_name?.charAt(0) || 'U'}{userData?.last_name?.charAt(0) || ''}
+                {userProfile?.full_name?.charAt(0) || 'U'}
               </span>
             </div>
           </div>
         </div>
 
+        {/* Notifications Dropdown */}
+        <AnimatePresence>
+          {notificationsOpen && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute right-8 top-20 w-80 glass-effect rounded-xl p-4 z-50 max-h-96 overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-bold">Notifications</h3>
+                <span className="text-xs text-gray-400">
+                  {notifications.filter(n => !n.read).length} unread
+                </span>
+              </div>
+              {notifications.length === 0 ? (
+                <p className="text-gray-400 text-center py-4">No notifications</p>
+              ) : (
+                <div className="space-y-3">
+                  {notifications.slice(0, 5).map(notification => (
+                    <div key={notification.id} className={`p-3 rounded-lg ${notification.read ? 'bg-white/5' : 'bg-blue-500/10'}`}>
+                      <p className="text-white font-medium text-sm">{notification.title}</p>
+                      <p className="text-gray-400 text-xs mt-1">{notification.message}</p>
+                      <p className="text-gray-500 text-xs mt-2">
+                        {new Date(notification.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Content Tabs */}
-        {selectedTab === 'overview' && <OverviewTab userData={userData} hideBalance={hideBalance} />}
-        {selectedTab === 'deposit' && <DepositTab onSubmit={handleDeposit} loading={depositLoading} success={depositSuccess} error={depositError} paymentProofFile={paymentProofFile} paymentProofPreview={paymentProofPreview} onFileUpload={handleFileUpload} />}
-        {selectedTab === 'withdraw' && <WithdrawTab onSubmit={handleWithdrawal} loading={withdrawLoading} success={withdrawSuccess} error={withdrawError} userBalance={userData?.balance || 0} />}
+        {selectedTab === 'overview' && <OverviewTab 
+          userProfile={userProfile} 
+          hideBalance={hideBalance} 
+          totalBalance={calculateTotalBalance()}
+          totalDeposits={calculateTotalDeposits()}
+          totalWithdrawals={calculateTotalWithdrawals()}
+          portfolio={userPortfolio}
+          cryptoPrices={cryptoPrices}
+        />}
+        {selectedTab === 'deposit' && <DepositTab 
+          onSubmit={handleDeposit} 
+          loading={depositLoading} 
+          success={depositSuccess} 
+          error={depositError} 
+          paymentProofFile={paymentProofFile} 
+          paymentProofPreview={paymentProofPreview} 
+          onFileUpload={handleFileUpload} 
+          userId={userProfile?.id || ''}
+        />}
+        {selectedTab === 'withdraw' && <WithdrawTab 
+          onSubmit={handleWithdrawal} 
+          loading={withdrawLoading} 
+          success={withdrawSuccess} 
+          error={withdrawError} 
+          userBalance={calculateTotalBalance()}
+          userId={userProfile?.id || ''}
+        />}
         {selectedTab === 'transactions' && <TransactionsTab transactions={transactions} />}
         {selectedTab === 'markets' && <MarketsTab prices={cryptoPrices} />}
-        {selectedTab === 'settings' && <SettingsTab userData={userData} />}
+        {selectedTab === 'settings' && <SettingsTab userProfile={userProfile} />}
       </main>
     </div>
   )
 
-  function OverviewTab({ userData, hideBalance }: { userData: UserData | null, hideBalance: boolean }) {
+  function OverviewTab({ 
+    userProfile, 
+    hideBalance, 
+    totalBalance,
+    totalDeposits,
+    totalWithdrawals,
+    portfolio,
+    cryptoPrices 
+  }: { 
+    userProfile: UserProfile | null;
+    hideBalance: boolean;
+    totalBalance: number;
+    totalDeposits: number;
+    totalWithdrawals: number;
+    portfolio: any[];
+    cryptoPrices: CryptoPrices;
+  }) {
     return (
       <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -577,10 +660,10 @@ export default function DashboardPage() {
               <Eye className="w-5 h-5 text-green-400" />
             </div>
             <p className="text-3xl font-bold text-white mb-2">
-              {hideBalance ? '••••••' : `$${(userData?.balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}
+              {hideBalance ? '••••••' : `$${totalBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}
             </p>
             <p className="text-gray-400 text-sm">
-              {userData && userData.balance === 0 ? 'Make a deposit to get started' : 'Available for trading & withdrawal'}
+              {totalBalance === 0 ? 'Make a deposit to get started' : 'Available for trading & withdrawal'}
             </p>
           </div>
           
@@ -590,7 +673,7 @@ export default function DashboardPage() {
               <ArrowUpRight className="w-5 h-5 text-blue-400" />
             </div>
             <p className="text-3xl font-bold text-white mb-2">
-              ${(userData?.total_deposits || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+              ${totalDeposits.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
             </p>
             <p className="text-gray-400 text-sm">All-time deposit amount</p>
           </div>
@@ -601,7 +684,7 @@ export default function DashboardPage() {
               <ArrowDownRight className="w-5 h-5 text-red-400" />
             </div>
             <p className="text-3xl font-bold text-white mb-2">
-              ${(userData?.total_withdrawals || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+              ${totalWithdrawals.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
             </p>
             <p className="text-gray-400 text-sm">All-time withdrawal amount</p>
           </div>
@@ -624,6 +707,46 @@ export default function DashboardPage() {
             <span className="text-white font-medium">Withdraw</span>
           </button>
         </div>
+
+        {/* Portfolio Section */}
+        {portfolio.length > 0 && (
+          <div className="glass-effect rounded-2xl p-6 mb-8">
+            <h2 className="text-2xl font-bold text-white mb-6">Your Portfolio</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-3 text-gray-400">Asset</th>
+                    <th className="text-left py-3 text-gray-400">Amount</th>
+                    <th className="text-left py-3 text-gray-400">Current Price</th>
+                    <th className="text-left py-3 text-gray-400">Value (USD)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {portfolio.map(item => {
+                    const assetPrice = cryptoPrices[item.asset.toLowerCase()]?.usd || 0
+                    const value = Number(item.amount) * assetPrice
+                    
+                    return (
+                      <tr key={item.id} className="border-b border-white/5 hover:bg-white/5">
+                        <td className="py-4">
+                          <span className="text-white font-medium">{item.asset}</span>
+                        </td>
+                        <td className="py-4 text-white">{Number(item.amount).toFixed(4)}</td>
+                        <td className="py-4 text-white">
+                          ${assetPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </td>
+                        <td className="py-4 text-white">
+                          ${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="glass-effect rounded-2xl p-6">
           <h2 className="text-2xl font-bold text-white mb-6">Getting Started</h2>
@@ -657,7 +780,16 @@ export default function DashboardPage() {
     )
   }
 
-  function DepositTab({ onSubmit, loading, success, error, paymentProofFile, paymentProofPreview, onFileUpload }: { 
+  function DepositTab({ 
+    onSubmit, 
+    loading, 
+    success, 
+    error, 
+    paymentProofFile, 
+    paymentProofPreview, 
+    onFileUpload,
+    userId
+  }: { 
     onSubmit: (data: DepositRequest) => void; 
     loading: boolean;
     success: boolean;
@@ -665,6 +797,7 @@ export default function DashboardPage() {
     paymentProofFile: File | null;
     paymentProofPreview: string | null;
     onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    userId: string;
   }) {
     const [amount, setAmount] = useState('')
     const [asset, setAsset] = useState('USD')
@@ -686,7 +819,7 @@ export default function DashboardPage() {
       }
       
       onSubmit({
-        userId: userData?.id || '',
+        userId,
         amount: parseFloat(amount),
         asset,
         paymentMethod,
@@ -1008,12 +1141,20 @@ export default function DashboardPage() {
     )
   }
 
-  function WithdrawTab({ onSubmit, loading, success, error, userBalance }: { 
+  function WithdrawTab({ 
+    onSubmit, 
+    loading, 
+    success, 
+    error, 
+    userBalance,
+    userId
+  }: { 
     onSubmit: (data: WithdrawalRequest) => void; 
     loading: boolean;
     success: boolean;
     error: string;
     userBalance: number;
+    userId: string;
   }) {
     const [amount, setAmount] = useState('')
     const [asset, setAsset] = useState('USD')
@@ -1035,7 +1176,7 @@ export default function DashboardPage() {
       }
       
       const data: WithdrawalRequest = {
-        userId: userData?.id || '',
+        userId,
         amount: parseFloat(amount),
         asset,
       }
@@ -1237,6 +1378,15 @@ export default function DashboardPage() {
   }
 
   function TransactionsTab({ transactions }: { transactions: any[] }) {
+    const getStatusColor = (status: string) => {
+      switch (status) {
+        case 'approved': return 'bg-green-500/20 text-green-400'
+        case 'pending': return 'bg-yellow-500/20 text-yellow-400'
+        case 'rejected': return 'bg-red-500/20 text-red-400'
+        default: return 'bg-gray-500/20 text-gray-400'
+      }
+    }
+
     return (
       <div>
         <h1 className="text-3xl font-bold text-white mb-8">Transaction History</h1>
@@ -1260,9 +1410,9 @@ export default function DashboardPage() {
                 <thead>
                   <tr className="border-b border-white/10">
                     <th className="text-left py-3 text-gray-400">Type</th>
-                    <th className="text-left py-3 text-gray-400">Asset/Method</th>
+                    <th className="text-left py-3 text-gray-400">Asset</th>
                     <th className="text-left py-3 text-gray-400">Amount</th>
-                    <th className="text-left py-3 text-gray-400">Value</th>
+                    <th className="text-left py-3 text-gray-400">Value (USD)</th>
                     <th className="text-left py-3 text-gray-400">Status</th>
                     <th className="text-left py-3 text-gray-400">Date</th>
                   </tr>
@@ -1275,14 +1425,15 @@ export default function DashboardPage() {
                           {tx.type}
                         </span>
                       </td>
-                      <td className="py-4">
-                        <div className="text-white">{tx.asset}</div>
-                        {tx.method && <div className="text-gray-400 text-xs">{tx.method}</div>}
+                      <td className="py-4 text-white">{tx.asset}</td>
+                      <td className={`py-4 ${tx.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>
+                        {tx.type === 'deposit' ? '+' : '-'}{Number(tx.amount).toFixed(2)} {tx.asset}
                       </td>
-                      <td className={`py-4 ${tx.amount.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>{tx.amount}</td>
-                      <td className="py-4 text-white">{tx.value}</td>
+                      <td className="py-4 text-white">
+                        ${Number(tx.value_usd).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      </td>
                       <td className="py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs ${tx.status === 'Completed' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                        <span className={`px-3 py-1 rounded-full text-xs ${getStatusColor(tx.status)}`}>
                           {tx.status}
                         </span>
                       </td>
@@ -1323,7 +1474,7 @@ export default function DashboardPage() {
     )
   }
 
-  function SettingsTab({ userData }: { userData: UserData | null }) {
+  function SettingsTab({ userProfile }: { userProfile: UserProfile | null }) {
     return (
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-8">Settings</h1>
@@ -1335,21 +1486,11 @@ export default function DashboardPage() {
           </h2>
           
           <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">First Name</label>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-400 mb-2">Full Name</label>
               <input
                 type="text"
-                value={userData?.first_name || ''}
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
-                readOnly
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Last Name</label>
-              <input
-                type="text"
-                value={userData?.last_name || ''}
+                value={userProfile?.full_name || ''}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
                 readOnly
               />
@@ -1359,27 +1500,34 @@ export default function DashboardPage() {
               <label className="block text-sm font-medium text-gray-400 mb-2">Email Address</label>
               <input
                 type="email"
-                value={userData?.email || ''}
+                value={userProfile?.email || ''}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
                 readOnly
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Phone Number</label>
-              <input
-                type="tel"
-                value={userData?.phone || ''}
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
-                readOnly
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Country</label>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Role</label>
               <input
                 type="text"
-                value={userData?.country || ''}
+                value={userProfile?.role || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">KYC Status</label>
+              <div className={`px-4 py-3 rounded-xl ${userProfile?.kyc_verified ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                {userProfile?.kyc_verified ? 'Verified ✓' : 'Pending Verification'}
+              </div>
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-400 mb-2">Member Since</label>
+              <input
+                type="text"
+                value={userProfile?.created_at ? new Date(userProfile.created_at).toLocaleDateString() : ''}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
                 readOnly
               />
