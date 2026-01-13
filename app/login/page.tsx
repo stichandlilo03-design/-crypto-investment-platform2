@@ -4,10 +4,10 @@ import { motion } from 'framer-motion'
 import { Mail, Lock, Wallet, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useRouter } from 'next/navigation'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export default function LoginPage() {
-  const { signIn, signInWithGoogle, signInWithGithub } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -15,16 +15,35 @@ export default function LoginPage() {
     email: '',
     password: ''
   })
+  
+  const supabase = createClientComponentClient()
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
-    const { error: signInError } = await signIn(formData.email, formData.password)
-    
-    if (signInError) {
-      setError(signInError.message)
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      })
+
+      if (signInError) {
+        setError(signInError.message)
+        setLoading(false)
+        return
+      }
+
+      if (data.user) {
+        // Redirect to dashboard on successful login
+        router.push('/dashboard')
+        router.refresh() // Refresh the router to update the session
+      }
+    } catch (err) {
+      setError('An unexpected error occurred')
+      console.error('Login error:', err)
       setLoading(false)
     }
   }
@@ -32,9 +51,21 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setLoading(true)
     setError('')
-    const { error: googleError } = await signInWithGoogle()
-    if (googleError) {
-      setError(googleError.message)
+    try {
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      
+      if (googleError) {
+        setError(googleError.message)
+        setLoading(false)
+      }
+    } catch (err) {
+      setError('Google login failed')
+      console.error('Google login error:', err)
       setLoading(false)
     }
   }
@@ -42,9 +73,21 @@ export default function LoginPage() {
   const handleGithubLogin = async () => {
     setLoading(true)
     setError('')
-    const { error: githubError } = await signInWithGithub()
-    if (githubError) {
-      setError(githubError.message)
+    try {
+      const { error: githubError } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      
+      if (githubError) {
+        setError(githubError.message)
+        setLoading(false)
+      }
+    } catch (err) {
+      setError('GitHub login failed')
+      console.error('GitHub login error:', err)
       setLoading(false)
     }
   }
