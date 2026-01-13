@@ -2,14 +2,14 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight, DollarSign,
-  PieChart, Activity, Settings, LogOut, Bell, Search, Plus, Download, Upload,
+  Wallet, ArrowUpRight, ArrowDownRight, DollarSign,
+  PieChart, Activity, Settings, LogOut, Bell, Search, Download, Upload,
   Eye, EyeOff, History, UserCircle, Menu, X, Check, Clock, AlertCircle, FileText,
-  CheckCircle, Loader2, ExternalLink
+  CheckCircle, Loader2, Copy, ExternalLink
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
-// Define types for crypto prices
+// Define types
 interface CryptoPrice {
   usd: number;
   usd_24h_change: number;
@@ -19,25 +19,14 @@ interface CryptoPrices {
   [key: string]: CryptoPrice;
 }
 
-// Define types for portfolio data
-interface PortfolioAsset {
-  name: string;
-  symbol: string;
-  amount: number;
-  coinGeckoId: string;
-  color: string;
-  value: number;
-  change: number;
-  trend: 'up' | 'down';
-}
-
-// Types for deposits and withdrawals
 interface DepositRequest {
   userId: string;
   amount: number;
   asset: string;
-  paymentProof?: string;
+  paymentMethod: 'wire' | 'crypto';
+  walletAddress?: string;
   txHash?: string;
+  paymentProof?: string;
 }
 
 interface WithdrawalRequest {
@@ -45,6 +34,22 @@ interface WithdrawalRequest {
   amount: number;
   asset: string;
   walletAddress: string;
+}
+
+interface UserData {
+  id: string;
+  email: string;
+  balance: number;
+  totalDeposits: number;
+  totalWithdrawals: number;
+}
+
+// Demo wallet addresses (replace with real ones)
+const DEMO_WALLETS = {
+  BTC: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+  ETH: '0x742d35Cc6634C0532925a3b844Bc9e70C6d4e5a1',
+  USDT: 'TBA6C4H5G7J8K9L0M1N2P3Q4R5S6T7U8V9W0',
+  USD: 'Bank Transfer Only'
 }
 
 export default function DashboardPage() {
@@ -60,16 +65,42 @@ export default function DashboardPage() {
   const [withdrawSuccess, setWithdrawSuccess] = useState(false)
   const [depositError, setDepositError] = useState('')
   const [withdrawError, setWithdrawError] = useState('')
+  const [userData, setUserData] = useState<UserData | null>(null)
+  const [transactions, setTransactions] = useState<any[]>([])
 
   // Mock user ID - in real app, get from auth
   const userId = 'user-123'
+
+  // Fetch user data (real implementation)
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        // In real app, fetch from your API
+        // const response = await fetch(`/api/user/${userId}`)
+        // const data = await response.json()
+        
+        // Mock data - replace with real API call
+        setUserData({
+          id: userId,
+          email: 'user@example.com',
+          balance: 0, // Start with 0 balance
+          totalDeposits: 0,
+          totalWithdrawals: 0
+        })
+      } catch (error) {
+        console.error('Error fetching user data:', error)
+      }
+    }
+
+    fetchUserData()
+  }, [userId])
 
   // Fetch real crypto prices
   useEffect(() => {
     const fetchPrices = async () => {
       try {
         const response = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,cardano,solana&vs_currencies=usd&include_24hr_change=true&x_cg_demo_api_key=CG-YnK9oBCYZL6hmz6g7R8HtqBm'
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether&vs_currencies=usd&include_24hr_change=true&x_cg_demo_api_key=CG-YnK9oBCYZL6hmz6g7R8HtqBm'
         )
         const data = await response.json()
         setCryptoPrices(data)
@@ -84,50 +115,6 @@ export default function DashboardPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // Mock user holdings - would come from database
-  const holdings: { [key: string]: number } = { 
-    bitcoin: 2.5847, 
-    ethereum: 15.2341, 
-    cardano: 50000, 
-    solana: 125.5 
-  }
-  
-  const calculateBalance = (): number => {
-    let total = 0
-    Object.keys(holdings).forEach(coin => {
-      if (cryptoPrices[coin]) {
-        total += holdings[coin] * cryptoPrices[coin].usd
-      }
-    })
-    return total
-  }
-
-  const userBalance = calculateBalance()
-  const userProfit = userBalance * 0.327 // 32.7% gain
-
-  const notifications = [
-    { id: 1, type: 'deposit' as const, title: 'Deposit Approved', message: 'Your BTC deposit of 0.5 BTC approved', time: '2h ago', read: false },
-    { id: 2, type: 'profit' as const, title: 'Portfolio Up 5%', message: 'Your portfolio gained $9,850', time: '4h ago', read: false },
-    { id: 3, type: 'withdraw' as const, title: 'Withdrawal Pending', message: 'Withdrawal under review', time: '1d ago', read: true },
-  ]
-
-  const portfolioData: PortfolioAsset[] = [
-    { name: 'Bitcoin', symbol: 'BTC', amount: 2.5847, coinGeckoId: 'bitcoin', color: 'from-orange-500 to-yellow-500' },
-    { name: 'Ethereum', symbol: 'ETH', amount: 15.2341, coinGeckoId: 'ethereum', color: 'from-blue-500 to-purple-500' },
-    { name: 'Cardano', symbol: 'ADA', amount: 50000, coinGeckoId: 'cardano', color: 'from-green-500 to-emerald-500' },
-    { name: 'Solana', symbol: 'SOL', amount: 125.5, coinGeckoId: 'solana', color: 'from-purple-500 to-pink-500' },
-  ].map(asset => {
-    const price = cryptoPrices[asset.coinGeckoId]
-    const value = price ? asset.amount * price.usd : 0
-    const change = price ? price.usd_24h_change : 0
-    return { 
-      ...asset, 
-      value, 
-      change, 
-      trend: change >= 0 ? 'up' as const : 'down' as const 
-    }
-  })
-
   // Handle deposit submission
   const handleDeposit = async (data: DepositRequest) => {
     setDepositLoading(true)
@@ -140,7 +127,13 @@ export default function DashboardPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify({
+          ...data,
+          // Add payment proof if wire transfer
+          paymentProof: data.paymentMethod === 'wire' ? data.paymentProof : undefined,
+          // Add transaction hash if crypto
+          txHash: data.paymentMethod === 'crypto' ? data.txHash : undefined
+        })
       })
       
       const result = await response.json()
@@ -150,11 +143,32 @@ export default function DashboardPage() {
       }
       
       setDepositSuccess(true)
+      
+      // Update user balance locally (in real app, this would come from server)
+      if (userData) {
+        setUserData({
+          ...userData,
+          totalDeposits: userData.totalDeposits + data.amount
+        })
+      }
+      
+      // Add to transactions
+      setTransactions(prev => [{
+        id: `deposit-${Date.now()}`,
+        type: 'deposit',
+        asset: data.asset,
+        amount: `+${data.amount}`,
+        value: `$${data.amount}`,
+        status: 'Pending',
+        date: new Date().toISOString().split('T')[0],
+        method: data.paymentMethod === 'wire' ? 'Wire Transfer' : 'Crypto'
+      }, ...prev])
+      
       // Reset form after success
       setTimeout(() => {
         setDepositSuccess(false)
         setSelectedTab('overview')
-      }, 3000)
+      }, 5000)
       
     } catch (error) {
       setDepositError(error instanceof Error ? error.message : 'Deposit failed')
@@ -168,6 +182,13 @@ export default function DashboardPage() {
     setWithdrawLoading(true)
     setWithdrawError('')
     setWithdrawSuccess(false)
+    
+    // Check if user has sufficient balance
+    if (userData && userData.balance < data.amount) {
+      setWithdrawError('Insufficient balance')
+      setWithdrawLoading(false)
+      return
+    }
     
     try {
       const response = await fetch('/api/withdraw', {
@@ -185,11 +206,32 @@ export default function DashboardPage() {
       }
       
       setWithdrawSuccess(true)
+      
+      // Update user balance locally (in real app, this would come from server)
+      if (userData) {
+        setUserData({
+          ...userData,
+          balance: userData.balance - data.amount,
+          totalWithdrawals: userData.totalWithdrawals + data.amount
+        })
+      }
+      
+      // Add to transactions
+      setTransactions(prev => [{
+        id: `withdraw-${Date.now()}`,
+        type: 'withdrawal',
+        asset: data.asset,
+        amount: `-${data.amount}`,
+        value: `-$${data.amount}`,
+        status: 'Pending',
+        date: new Date().toISOString().split('T')[0]
+      }, ...prev])
+      
       // Reset form after success
       setTimeout(() => {
         setWithdrawSuccess(false)
         setSelectedTab('overview')
-      }, 3000)
+      }, 5000)
       
     } catch (error) {
       setWithdrawError(error instanceof Error ? error.message : 'Withdrawal failed')
@@ -198,16 +240,25 @@ export default function DashboardPage() {
     }
   }
 
+  // Copy wallet address to clipboard
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        alert('Wallet address copied to clipboard!')
+      })
+      .catch(err => {
+        console.error('Failed to copy:', err)
+      })
+  }
+
   const NavItems = () => (
     <nav className="space-y-2">
       {[
         { id: 'overview', icon: PieChart, label: 'Overview' },
-        { id: 'portfolio', icon: Wallet, label: 'Portfolio' },
-        { id: 'transactions', icon: History, label: 'Transactions' },
-        { id: 'markets', icon: Activity, label: 'Markets' },
         { id: 'deposit', icon: Upload, label: 'Deposit', highlight: true },
         { id: 'withdraw', icon: Download, label: 'Withdraw' },
-        { id: 'profile', icon: UserCircle, label: 'Profile' },
+        { id: 'transactions', icon: History, label: 'Transactions' },
+        { id: 'markets', icon: Activity, label: 'Markets' },
         { id: 'settings', icon: Settings, label: 'Settings' }
       ].map(item => (
         <button
@@ -276,16 +327,17 @@ export default function DashboardPage() {
             </button>
             <div>
               <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-              <p className="text-gray-400">Welcome back!</p>
+              <p className="text-gray-400">Welcome back, {userData?.email || 'User'}!</p>
             </div>
           </div>
           <div className="flex items-center space-x-4">
+            <button onClick={() => setHideBalance(!hideBalance)} 
+              className="p-2.5 rounded-xl glass-effect hover:bg-white/10">
+              {hideBalance ? <EyeOff className="w-5 h-5 text-white" /> : <Eye className="w-5 h-5 text-white" />}
+            </button>
             <button onClick={() => setNotificationsOpen(!notificationsOpen)} 
               className="p-2.5 rounded-xl glass-effect hover:bg-white/10 relative">
               <Bell className="w-5 h-5 text-white" />
-              {notifications.filter(n => !n.read).length > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              )}
             </button>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold">U</span>
@@ -293,108 +345,100 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Notification Panel */}
-        <AnimatePresence>
-          {notificationsOpen && (
-            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-              className="fixed top-20 right-4 w-96 glass-effect rounded-2xl p-4 z-50 max-h-96 overflow-y-auto">
-              <h3 className="text-lg font-bold text-white mb-4">Notifications</h3>
-              {notifications.map(n => (
-                <div key={n.id} className={`p-3 rounded-xl mb-2 ${n.read ? 'bg-white/5' : 'bg-purple-500/10'}`}>
-                  <div className="flex items-start space-x-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      n.type === 'deposit' ? 'bg-green-500/20 text-green-400' :
-                      n.type === 'withdraw' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'
-                    }`}>
-                      {n.type === 'deposit' ? <Check className="w-4 h-4" /> :
-                       n.type === 'withdraw' ? <Clock className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-white text-sm font-semibold">{n.title}</p>
-                      <p className="text-gray-400 text-xs">{n.message}</p>
-                      <p className="text-gray-500 text-xs mt-1">{n.time}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Content Tabs */}
-        {selectedTab === 'overview' && <OverviewTab />}
+        {selectedTab === 'overview' && <OverviewTab userData={userData} hideBalance={hideBalance} />}
         {selectedTab === 'deposit' && <DepositTab onSubmit={handleDeposit} loading={depositLoading} success={depositSuccess} error={depositError} />}
-        {selectedTab === 'withdraw' && <WithdrawTab onSubmit={handleWithdrawal} loading={withdrawLoading} success={withdrawSuccess} error={withdrawError} />}
-        {selectedTab === 'transactions' && <TransactionsTab />}
+        {selectedTab === 'withdraw' && <WithdrawTab onSubmit={handleWithdrawal} loading={withdrawLoading} success={withdrawSuccess} error={withdrawError} userBalance={userData?.balance || 0} />}
+        {selectedTab === 'transactions' && <TransactionsTab transactions={transactions} />}
         {selectedTab === 'markets' && <MarketsTab prices={cryptoPrices} />}
-        {selectedTab === 'portfolio' && <PortfolioTab data={portfolioData} hide={hideBalance} />}
       </main>
     </div>
   )
 
-  function OverviewTab() {
+  function OverviewTab({ userData, hideBalance }: { userData: UserData | null, hideBalance: boolean }) {
     return (
       <>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatCard title="Total Balance" value={`$${userBalance.toLocaleString(undefined, {maximumFractionDigits: 2})}`} 
-            change="+32.7%" icon={<Eye />} />
-          <StatCard title="Total Profit" value={`+$${userProfit.toLocaleString(undefined, {maximumFractionDigits: 2})}`} 
-            change="+32.7% ROI" icon={<DollarSign />} color="green" />
-          <StatCard title="Assets" value="4" subtitle="BTC, ETH, ADA, SOL" icon={<Wallet />} color="blue" />
-          <StatCard title="24h Change" value={cryptoPrices.bitcoin ? `${cryptoPrices.bitcoin.usd_24h_change.toFixed(2)}%` : '...'} 
-            icon={<Activity />} color="purple" />
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-          {[
-            { icon: <Upload />, label: 'Deposit', color: 'from-green-500 to-emerald-500', tab: 'deposit' },
-            { icon: <Download />, label: 'Withdraw', color: 'from-red-500 to-pink-500', tab: 'withdraw' },
-            { icon: <ArrowUpRight />, label: 'Buy', color: 'from-blue-500 to-cyan-500', tab: 'markets' },
-            { icon: <ArrowDownRight />, label: 'Sell', color: 'from-orange-500 to-yellow-500', tab: 'markets' }
-          ].map((action, i) => (
-            <button key={i} onClick={() => setSelectedTab(action.tab)}
-              className="p-4 rounded-xl glass-effect hover:bg-white/10 group">
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center mb-3 mx-auto group-hover:scale-110 transition-transform`}>
-                {action.icon}
-              </div>
-              <span className="text-white font-medium">{action.label}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 glass-effect rounded-2xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-6">Your Portfolio</h2>
-            {portfolioData.map((asset, i) => (
-              <div key={i} className="p-4 rounded-xl bg-white/5 hover:bg-white/10 mb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${asset.color}`}></div>
-                    <div>
-                      <p className="text-white font-semibold">{asset.name}</p>
-                      <p className="text-gray-400 text-sm">{asset.amount} {asset.symbol}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-white font-bold">${asset.value.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
-                    <p className={`text-sm ${asset.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                      {asset.change.toFixed(2)}%
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="p-6 rounded-2xl glass-effect hover:bg-white/5">
+            <div className="flex justify-between mb-4">
+              <span className="text-gray-400 text-sm">Total Balance</span>
+              <Eye className="w-5 h-5 text-green-400" />
+            </div>
+            <p className="text-3xl font-bold text-white mb-2">
+              {hideBalance ? '••••••' : `$${userData?.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}`}
+            </p>
+            <p className="text-gray-400 text-sm">
+              {userData && userData.balance === 0 ? 'Make a deposit to get started' : 'Available for trading & withdrawal'}
+            </p>
           </div>
           
-          <div className="glass-effect rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-6">Recent Activity</h2>
-            {notifications.map((n, i) => (
-              <div key={i} className="p-3 rounded-xl bg-white/5 mb-3">
-                <p className="text-white text-sm font-semibold">{n.title}</p>
-                <p className="text-gray-400 text-xs">{n.message}</p>
-                <p className="text-gray-500 text-xs mt-1">{n.time}</p>
+          <div className="p-6 rounded-2xl glass-effect hover:bg-white/5">
+            <div className="flex justify-between mb-4">
+              <span className="text-gray-400 text-sm">Total Deposits</span>
+              <ArrowUpRight className="w-5 h-5 text-blue-400" />
+            </div>
+            <p className="text-3xl font-bold text-white mb-2">
+              ${userData?.totalDeposits.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+            </p>
+            <p className="text-gray-400 text-sm">All-time deposit amount</p>
+          </div>
+          
+          <div className="p-6 rounded-2xl glass-effect hover:bg-white/5">
+            <div className="flex justify-between mb-4">
+              <span className="text-gray-400 text-sm">Total Withdrawals</span>
+              <ArrowDownRight className="w-5 h-5 text-red-400" />
+            </div>
+            <p className="text-3xl font-bold text-white mb-2">
+              ${userData?.totalWithdrawals.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+            </p>
+            <p className="text-gray-400 text-sm">All-time withdrawal amount</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-8">
+          <button onClick={() => setSelectedTab('deposit')}
+            className="p-4 rounded-xl glass-effect hover:bg-white/10 group">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center mb-3 mx-auto group-hover:scale-110 transition-transform">
+              <Upload className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-white font-medium">Deposit</span>
+          </button>
+          
+          <button onClick={() => setSelectedTab('withdraw')}
+            className="p-4 rounded-xl glass-effect hover:bg-white/10 group">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center mb-3 mx-auto group-hover:scale-110 transition-transform">
+              <Download className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-white font-medium">Withdraw</span>
+          </button>
+        </div>
+
+        <div className="glass-effect rounded-2xl p-6">
+          <h2 className="text-2xl font-bold text-white mb-6">Getting Started</h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center mb-3">
+                <span className="text-blue-400 font-bold">1</span>
               </div>
-            ))}
+              <h3 className="text-white font-semibold mb-2">Make a Deposit</h3>
+              <p className="text-gray-400 text-sm">Deposit funds via wire transfer or crypto to start trading</p>
+            </div>
+            
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center mb-3">
+                <span className="text-purple-400 font-bold">2</span>
+              </div>
+              <h3 className="text-white font-semibold mb-2">Wait for Approval</h3>
+              <p className="text-gray-400 text-sm">Admin will approve your deposit within 24-48 hours</p>
+            </div>
+            
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center mb-3">
+                <span className="text-green-400 font-bold">3</span>
+              </div>
+              <h3 className="text-white font-semibold mb-2">Start Trading</h3>
+              <p className="text-gray-400 text-sm">Once approved, funds will be available in your account</p>
+            </div>
           </div>
         </div>
       </>
@@ -408,18 +452,32 @@ export default function DashboardPage() {
     error: string;
   }) {
     const [amount, setAmount] = useState('')
-    const [asset, setAsset] = useState('BTC')
-    const [paymentProof, setPaymentProof] = useState('')
+    const [asset, setAsset] = useState('USD')
+    const [paymentMethod, setPaymentMethod] = useState<'wire' | 'crypto'>('wire')
     const [txHash, setTxHash] = useState('')
+    const [paymentProof, setPaymentProof] = useState('')
 
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault()
+      
+      if (paymentMethod === 'crypto' && !txHash) {
+        alert('Please enter transaction hash for crypto deposits')
+        return
+      }
+      
+      if (paymentMethod === 'wire' && !paymentProof) {
+        alert('Please provide payment proof for wire transfers')
+        return
+      }
+      
       onSubmit({
         userId,
         amount: parseFloat(amount),
         asset,
-        paymentProof: paymentProof || undefined,
-        txHash: txHash || undefined
+        paymentMethod,
+        walletAddress: DEMO_WALLETS[asset as keyof typeof DEMO_WALLETS],
+        txHash: paymentMethod === 'crypto' ? txHash : undefined,
+        paymentProof: paymentMethod === 'wire' ? paymentProof : undefined
       })
     }
 
@@ -456,16 +514,85 @@ export default function DashboardPage() {
           </motion.div>
         )}
 
+        <div className="glass-effect rounded-2xl p-6 mb-8">
+          <h2 className="text-xl font-bold text-white mb-6">Select Deposit Method</h2>
+          
+          <div className="grid md:grid-cols-2 gap-4 mb-6">
+            <button
+              onClick={() => setPaymentMethod('wire')}
+              className={`p-6 rounded-xl border-2 transition-all ${paymentMethod === 'wire' ? 'border-green-500 bg-green-500/10' : 'border-white/10 bg-white/5 hover:border-green-500/50'}`}
+            >
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mb-3">
+                <span className="text-white text-xl">$</span>
+              </div>
+              <h3 className="text-white font-bold mb-2">Wire Transfer</h3>
+              <p className="text-gray-400 text-sm">Bank transfer (USD)</p>
+              {paymentMethod === 'wire' && (
+                <div className="mt-3">
+                  <p className="text-green-400 text-sm">✓ Selected</p>
+                </div>
+              )}
+            </button>
+            
+            <button
+              onClick={() => setPaymentMethod('crypto')}
+              className={`p-6 rounded-xl border-2 transition-all ${paymentMethod === 'crypto' ? 'border-green-500 bg-green-500/10' : 'border-white/10 bg-white/5 hover:border-green-500/50'}`}
+            >
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center mb-3">
+                <span className="text-white text-xl">₿</span>
+              </div>
+              <h3 className="text-white font-bold mb-2">Crypto</h3>
+              <p className="text-gray-400 text-sm">BTC, ETH, USDT</p>
+              {paymentMethod === 'crypto' && (
+                <div className="mt-3">
+                  <p className="text-green-400 text-sm">✓ Selected</p>
+                </div>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {paymentMethod === 'crypto' && (
+          <div className="glass-effect rounded-2xl p-6 mb-8">
+            <h2 className="text-xl font-bold text-white mb-4">Deposit Wallet Address</h2>
+            <div className="space-y-3">
+              {Object.entries(DEMO_WALLETS).map(([assetType, address]) => (
+                <div key={assetType} className="p-4 rounded-xl bg-white/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-white font-medium">{assetType}</span>
+                    <button
+                      onClick={() => copyToClipboard(address)}
+                      className="px-3 py-1 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 text-sm flex items-center space-x-1"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+                  <p className="text-gray-400 text-sm font-mono break-all">{address}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-gray-400 text-sm mt-4">
+              Send only {paymentMethod === 'crypto' ? asset : 'USD'} to this address. Sending other assets may result in loss of funds.
+            </p>
+          </div>
+        )}
+
         <div className="glass-effect rounded-2xl p-6">
+          <h2 className="text-xl font-bold text-white mb-6">Deposit Details</h2>
+          
           <form onSubmit={handleSubmit}>
             <div className="space-y-6">
-              <FormField 
-                label="Select Asset" 
-                type="select" 
-                value={asset}
-                onChange={(e) => setAsset(e.target.value)}
-                options={['BTC', 'ETH', 'USDT', 'USD']} 
-              />
+              {paymentMethod === 'crypto' && (
+                <FormField 
+                  label="Select Cryptocurrency" 
+                  type="select" 
+                  value={asset}
+                  onChange={(e) => setAsset(e.target.value)}
+                  options={['BTC', 'ETH', 'USDT']} 
+                  required
+                />
+              )}
               
               <FormField 
                 label="Amount" 
@@ -473,24 +600,32 @@ export default function DashboardPage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
+                min="0"
+                step="0.01"
                 required
               />
               
-              <FormField 
-                label="Transaction Hash (Optional)" 
-                type="text" 
-                value={txHash}
-                onChange={(e) => setTxHash(e.target.value)}
-                placeholder="Enter blockchain transaction hash"
-              />
+              {paymentMethod === 'crypto' && (
+                <FormField 
+                  label="Transaction Hash" 
+                  type="text" 
+                  value={txHash}
+                  onChange={(e) => setTxHash(e.target.value)}
+                  placeholder="Enter blockchain transaction hash"
+                  required
+                />
+              )}
               
-              <FormField 
-                label="Payment Proof URL (Optional)" 
-                type="text" 
-                value={paymentProof}
-                onChange={(e) => setPaymentProof(e.target.value)}
-                placeholder="Link to payment proof screenshot"
-              />
+              {paymentMethod === 'wire' && (
+                <FormField 
+                  label="Payment Proof (Transaction ID/Receipt)" 
+                  type="text" 
+                  value={paymentProof}
+                  onChange={(e) => setPaymentProof(e.target.value)}
+                  placeholder="Enter transaction ID or upload receipt"
+                  required
+                />
+              )}
               
               <button 
                 type="submit"
@@ -513,8 +648,24 @@ export default function DashboardPage() {
             <div className="flex items-start space-x-3">
               <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
               <div>
-                <h4 className="text-yellow-400 font-semibold mb-1">Important</h4>
-                <p className="text-gray-300 text-sm">All deposits require admin approval. Upload proof of payment after depositing. Processing: 24-48 hours.</p>
+                <h4 className="text-yellow-400 font-semibold mb-1">Important Instructions</h4>
+                <ul className="text-gray-300 text-sm space-y-1">
+                  <li>• All deposits require admin approval</li>
+                  <li>• Processing time: 24-48 hours</li>
+                  <li>• Minimum deposit: $50</li>
+                  {paymentMethod === 'crypto' && (
+                    <>
+                      <li>• Send only the selected cryptocurrency</li>
+                      <li>• Include transaction hash for verification</li>
+                    </>
+                  )}
+                  {paymentMethod === 'wire' && (
+                    <>
+                      <li>• Include bank transfer receipt/screenshot</li>
+                      <li>• Use reference: DEPOSIT-{userId}</li>
+                    </>
+                  )}
+                </ul>
               </div>
             </div>
           </div>
@@ -523,18 +674,25 @@ export default function DashboardPage() {
     )
   }
 
-  function WithdrawTab({ onSubmit, loading, success, error }: { 
+  function WithdrawTab({ onSubmit, loading, success, error, userBalance }: { 
     onSubmit: (data: WithdrawalRequest) => void; 
     loading: boolean;
     success: boolean;
     error: string;
+    userBalance: number;
   }) {
     const [amount, setAmount] = useState('')
-    const [asset, setAsset] = useState('BTC')
+    const [asset, setAsset] = useState('USD')
     const [walletAddress, setWalletAddress] = useState('')
 
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault()
+      
+      if (parseFloat(amount) > userBalance) {
+        alert('Amount exceeds available balance')
+        return
+      }
+      
       onSubmit({
         userId,
         amount: parseFloat(amount),
@@ -546,6 +704,18 @@ export default function DashboardPage() {
     return (
       <div className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-8">Withdraw Funds</h1>
+        
+        <div className="glass-effect rounded-2xl p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm">Available Balance</p>
+              <p className="text-3xl font-bold text-white">${userBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <Wallet className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </div>
         
         {success && (
           <motion.div 
@@ -584,7 +754,8 @@ export default function DashboardPage() {
                 type="select" 
                 value={asset}
                 onChange={(e) => setAsset(e.target.value)}
-                options={['BTC', 'ETH', 'USDT', 'USD']} 
+                options={['USD', 'BTC', 'ETH', 'USDT']} 
+                required
               />
               
               <FormField 
@@ -593,11 +764,14 @@ export default function DashboardPage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
+                min="0"
+                max={userBalance}
+                step="0.01"
                 required
               />
               
               <FormField 
-                label="Wallet Address" 
+                label="Destination Wallet Address" 
                 type="text" 
                 value={walletAddress}
                 onChange={(e) => setWalletAddress(e.target.value)}
@@ -607,7 +781,7 @@ export default function DashboardPage() {
               
               <button 
                 type="submit"
-                disabled={loading || !amount || !walletAddress}
+                disabled={loading || !amount || !walletAddress || parseFloat(amount) > userBalance}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
                 {loading ? (
@@ -621,52 +795,78 @@ export default function DashboardPage() {
               </button>
             </div>
           </form>
+          
+          <div className="mt-8 p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+            <div className="flex items-start space-x-3">
+              <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
+              <div>
+                <h4 className="text-yellow-400 font-semibold mb-1">Important Information</h4>
+                <ul className="text-gray-300 text-sm space-y-1">
+                  <li>• All withdrawals require admin approval</li>
+                  <li>• Processing time: 24-48 hours</li>
+                  <li>• Minimum withdrawal: $50</li>
+                  <li>• Network fees may apply for crypto withdrawals</li>
+                  <li>• Ensure wallet address is correct</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
-  function TransactionsTab() {
-    const txns = [
-      { type: 'Deposit', asset: 'BTC', amount: '+0.5', value: '$20,450', status: 'Completed' as const, date: '2024-01-10' },
-      { type: 'Withdrawal', asset: 'ETH', amount: '-2.0', value: '-$6,400', status: 'Pending' as const, date: '2024-01-09' },
-      { type: 'Buy', asset: 'ADA', amount: '+5000', value: '$2,550', status: 'Completed' as const, date: '2024-01-08' },
-    ]
+  function TransactionsTab({ transactions }: { transactions: any[] }) {
     return (
       <div>
         <h1 className="text-3xl font-bold text-white mb-8">Transaction History</h1>
-        <div className="glass-effect rounded-2xl p-6">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-left py-3 text-gray-400">Type</th>
-                  <th className="text-left py-3 text-gray-400">Asset</th>
-                  <th className="text-left py-3 text-gray-400">Amount</th>
-                  <th className="text-left py-3 text-gray-400">Value</th>
-                  <th className="text-left py-3 text-gray-400">Status</th>
-                  <th className="text-left py-3 text-gray-400">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {txns.map((tx, i) => (
-                  <tr key={i} className="border-b border-white/5 hover:bg-white/5">
-                    <td className="py-4 text-white">{tx.type}</td>
-                    <td className="py-4 text-white">{tx.asset}</td>
-                    <td className={`py-4 ${tx.amount.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>{tx.amount}</td>
-                    <td className="py-4 text-white">{tx.value}</td>
-                    <td className="py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs ${tx.status === 'Completed' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                        {tx.status}
-                      </span>
-                    </td>
-                    <td className="py-4 text-gray-400">{tx.date}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        
+        {transactions.length === 0 ? (
+          <div className="glass-effect rounded-2xl p-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+              <History className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">No Transactions Yet</h3>
+            <p className="text-gray-400 mb-6">Make your first deposit to see transactions here</p>
+            <button onClick={() => setSelectedTab('deposit')} 
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium">
+              Make a Deposit
+            </button>
           </div>
-        </div>
+        ) : (
+          <div className="glass-effect rounded-2xl p-6">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-3 text-gray-400">Type</th>
+                    <th className="text-left py-3 text-gray-400">Asset</th>
+                    <th className="text-left py-3 text-gray-400">Amount</th>
+                    <th className="text-left py-3 text-gray-400">Value</th>
+                    <th className="text-left py-3 text-gray-400">Status</th>
+                    <th className="text-left py-3 text-gray-400">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="py-4 text-white">{tx.type}</td>
+                      <td className="py-4 text-white">{tx.asset}</td>
+                      <td className={`py-4 ${tx.amount.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>{tx.amount}</td>
+                      <td className="py-4 text-white">{tx.value}</td>
+                      <td className="py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs ${tx.status === 'Completed' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                          {tx.status}
+                        </span>
+                      </td>
+                      <td className="py-4 text-gray-400">{tx.date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -675,11 +875,15 @@ export default function DashboardPage() {
     return (
       <div>
         <h1 className="text-3xl font-bold text-white mb-8">Crypto Markets</h1>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {Object.entries(prices).map(([coin, data]) => (
             <div key={coin} className="glass-effect rounded-2xl p-6 hover:bg-white/5">
-              <h3 className="text-xl font-bold text-white capitalize mb-2">{coin}</h3>
-              <p className="text-3xl font-bold text-white mb-2">${data.usd?.toLocaleString()}</p>
+              <h3 className="text-xl font-bold text-white capitalize mb-2">
+                {coin === 'tether' ? 'USDT' : coin}
+              </h3>
+              <p className="text-3xl font-bold text-white mb-2">
+                ${data.usd?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+              </p>
               <p className={`text-sm ${data.usd_24h_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {data.usd_24h_change?.toFixed(2)}% 24h
               </p>
@@ -689,56 +893,6 @@ export default function DashboardPage() {
       </div>
     )
   }
-
-  function PortfolioTab({ data, hide }: { data: PortfolioAsset[], hide: boolean }) {
-    return (
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-8">Portfolio Details</h1>
-        <div className="grid gap-6">
-          {data.map((asset, i) => (
-            <div key={i} className="glass-effect rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-4">
-                  <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${asset.color}`}></div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-white">{asset.name}</h3>
-                    <p className="text-gray-400">{asset.amount} {asset.symbol}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-bold text-white">${asset.value.toLocaleString()}</p>
-                  <p className={`text-lg ${asset.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                    {asset.change.toFixed(2)}%
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-}
-
-function StatCard({ title, value, change, subtitle, icon, color = 'green' }: { 
-  title: string; 
-  value: string; 
-  change?: string; 
-  subtitle?: string; 
-  icon: React.ReactNode; 
-  color?: string 
-}) {
-  return (
-    <div className="p-6 rounded-2xl glass-effect hover:bg-white/5">
-      <div className="flex justify-between mb-4">
-        <span className="text-gray-400 text-sm">{title}</span>
-        <div className={`text-${color}-400`}>{icon}</div>
-      </div>
-      <p className="text-3xl font-bold text-white mb-2">{value}</p>
-      {change && <p className="text-green-400 text-sm">{change}</p>}
-      {subtitle && <p className="text-gray-400 text-sm">{subtitle}</p>}
-    </div>
-  )
 }
 
 function FormField({ 
@@ -748,7 +902,10 @@ function FormField({
   onChange,
   placeholder, 
   options,
-  required = false 
+  required = false,
+  min,
+  max,
+  step
 }: { 
   label: string; 
   type: string; 
@@ -757,6 +914,9 @@ function FormField({
   placeholder?: string; 
   options?: string[];
   required?: boolean;
+  min?: string;
+  max?: string;
+  step?: string;
 }) {
   return (
     <div>
@@ -780,6 +940,9 @@ function FormField({
           value={value}
           onChange={onChange}
           placeholder={placeholder}
+          min={min}
+          max={max}
+          step={step}
           className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
           required={required}
         />
