@@ -93,9 +93,11 @@ export default function DashboardPage() {
   const [transactions, setTransactions] = useState<any[]>([])
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
   const [paymentProofPreview, setPaymentProofPreview] = useState<string | null>(null)
-
-  // Mock user ID - in real app, get from auth
-  const userId = 'user-123'
+  const [notifications] = useState([
+    { id: 1, type: 'info' as const, title: 'Welcome to CryptoVault', message: 'Your account has been created successfully', time: 'Just now', read: false },
+    { id: 2, type: 'success' as const, title: 'System Update', message: 'New features have been added to your dashboard', time: '2 hours ago', read: true },
+    { id: 3, type: 'warning' as const, title: 'Security Alert', message: 'Please enable 2FA for better security', time: '1 day ago', read: true },
+  ])
 
   // Fetch user data (real implementation)
   useEffect(() => {
@@ -105,25 +107,43 @@ export default function DashboardPage() {
         // const response = await fetch(`/api/user/${userId}`)
         // const data = await response.json()
         
-        // Mock data - replace with real API call
-        setUserData({
-          id: userId,
-          email: 'john.doe@example.com',
-          firstName: 'John',
-          lastName: 'Doe',
-          balance: 0,
-          totalDeposits: 0,
-          totalWithdrawals: 0,
-          phone: '+1 (555) 123-4567',
-          country: 'United States'
-        })
+        // Get user from localStorage or session (mock)
+        const storedUser = localStorage.getItem('cryptovault_user')
+        if (storedUser) {
+          setUserData(JSON.parse(storedUser))
+        } else {
+          // Create mock user if not exists
+          const mockUser: UserData = {
+            id: 'user-' + Math.random().toString(36).substr(2, 9),
+            email: '',
+            firstName: '',
+            lastName: '',
+            balance: 0,
+            totalDeposits: 0,
+            totalWithdrawals: 0,
+            phone: '',
+            country: ''
+          }
+          
+          // Ask for user details
+          const firstName = prompt('Enter your first name:') || 'User'
+          const lastName = prompt('Enter your last name:') || ''
+          const email = prompt('Enter your email:') || 'user@example.com'
+          
+          mockUser.firstName = firstName
+          mockUser.lastName = lastName
+          mockUser.email = email
+          
+          localStorage.setItem('cryptovault_user', JSON.stringify(mockUser))
+          setUserData(mockUser)
+        }
       } catch (error) {
         console.error('Error fetching user data:', error)
       }
     }
 
     fetchUserData()
-  }, [userId])
+  }, [])
 
   // Fetch real crypto prices
   useEffect(() => {
@@ -306,6 +326,12 @@ export default function DashboardPage() {
     }
   }
 
+  // Handle logout
+  const handleLogout = () => {
+    localStorage.removeItem('cryptovault_user')
+    window.location.href = '/'
+  }
+
   // Copy wallet address to clipboard
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -354,9 +380,12 @@ export default function DashboardPage() {
           <span className="text-xl font-bold text-white">CryptoVault</span>
         </div>
         <NavItems />
-        <button className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5">
+        <button 
+          onClick={handleLogout}
+          className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
+        >
           <LogOut className="w-5 h-5" />
-          <span>Logout</span>
+          <span className="font-medium">Logout</span>
         </button>
       </aside>
 
@@ -364,10 +393,19 @@ export default function DashboardPage() {
       <AnimatePresence>
         {sidebarOpen && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-40" />
-            <motion.aside initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }}
-              className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)} 
+              className="lg:hidden fixed inset-0 bg-black/50 z-40" 
+            />
+            <motion.aside 
+              initial={{ x: -300 }} 
+              animate={{ x: 0 }} 
+              exit={{ x: -300 }}
+              className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50"
+            >
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center space-x-2">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -375,9 +413,18 @@ export default function DashboardPage() {
                   </div>
                   <span className="text-xl font-bold text-white">CryptoVault</span>
                 </div>
-                <button onClick={() => setSidebarOpen(false)}><X className="w-6 h-6 text-white" /></button>
+                <button onClick={() => setSidebarOpen(false)}>
+                  <X className="w-6 h-6 text-white" />
+                </button>
               </div>
               <NavItems />
+              <button 
+                onClick={handleLogout}
+                className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
+              >
+                <LogOut className="w-5 h-5" />
+                <span className="font-medium">Logout</span>
+              </button>
             </motion.aside>
           </>
         )}
@@ -394,22 +441,108 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-3xl font-bold text-white">Dashboard</h1>
               <p className="text-gray-400">
-                Welcome back, {userData ? `${userData.firstName} ${userData.lastName}` : 'User'}!
+                {userData ? (
+                  userData.firstName ? 
+                    `Welcome back, ${userData.firstName}!` : 
+                    `Welcome back, ${userData.email.split('@')[0]}!`
+                ) : 'Welcome back!'}
               </p>
             </div>
           </div>
           <div className="flex items-center space-x-4">
             <button onClick={() => setHideBalance(!hideBalance)} 
-              className="p-2.5 rounded-xl glass-effect hover:bg-white/10">
+              className="p-2.5 rounded-xl glass-effect hover:bg-white/10 transition-all">
               {hideBalance ? <EyeOff className="w-5 h-5 text-white" /> : <Eye className="w-5 h-5 text-white" />}
             </button>
-            <button onClick={() => setNotificationsOpen(!notificationsOpen)} 
-              className="p-2.5 rounded-xl glass-effect hover:bg-white/10 relative">
-              <Bell className="w-5 h-5 text-white" />
-            </button>
+            
+            {/* Notifications Button */}
+            <div className="relative">
+              <button 
+                onClick={() => setNotificationsOpen(!notificationsOpen)} 
+                className="p-2.5 rounded-xl glass-effect hover:bg-white/10 transition-all relative"
+              >
+                <Bell className="w-5 h-5 text-white" />
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                )}
+              </button>
+              
+              {/* Notifications Dropdown */}
+              <AnimatePresence>
+                {notificationsOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    className="absolute right-0 top-12 w-80 glass-effect rounded-2xl p-4 z-50 shadow-xl"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold text-white">Notifications</h3>
+                      <button 
+                        onClick={() => setNotificationsOpen(false)}
+                        className="p-1 hover:bg-white/10 rounded-lg"
+                      >
+                        <X className="w-4 h-4 text-gray-400" />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {notifications.map(notification => (
+                        <div 
+                          key={notification.id} 
+                          className={`p-3 rounded-xl ${notification.read ? 'bg-white/5' : 'bg-purple-500/10'} hover:bg-white/10 transition-all`}
+                          onClick={() => {
+                            // Mark as read on click
+                            if (!notification.read) {
+                              // In real app, update via API
+                            }
+                          }}
+                        >
+                          <div className="flex items-start space-x-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                              notification.type === 'success' ? 'bg-green-500/20 text-green-400' :
+                              notification.type === 'warning' ? 'bg-yellow-500/20 text-yellow-400' :
+                              'bg-blue-500/20 text-blue-400'
+                            }`}>
+                              {notification.type === 'success' ? <Check className="w-4 h-4" /> :
+                               notification.type === 'warning' ? <AlertCircle className="w-4 h-4" /> :
+                               <Bell className="w-4 h-4" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm font-semibold truncate">{notification.title}</p>
+                              <p className="text-gray-400 text-xs mt-1">{notification.message}</p>
+                              <p className="text-gray-500 text-xs mt-2">{notification.time}</p>
+                            </div>
+                            {!notification.read && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {notifications.length === 0 && (
+                      <div className="text-center py-4">
+                        <Bell className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-400 text-sm">No notifications</p>
+                      </div>
+                    )}
+                    
+                    <div className="mt-4 pt-3 border-t border-white/10">
+                      <button className="w-full py-2 text-center text-sm text-purple-400 hover:text-purple-300 transition-colors">
+                        View All Notifications
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            
+            {/* User Avatar */}
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold">
-                {userData?.firstName?.charAt(0) || 'U'}{userData?.lastName?.charAt(0) || ''}
+                {userData?.firstName?.charAt(0)?.toUpperCase() || 
+                 userData?.email?.charAt(0)?.toUpperCase() || 'U'}
               </span>
             </div>
           </div>
@@ -545,7 +678,7 @@ export default function DashboardPage() {
       }
       
       onSubmit({
-        userId,
+        userId: userData?.id || 'user-123',
         amount: parseFloat(amount),
         asset,
         paymentMethod,
@@ -878,11 +1011,11 @@ export default function DashboardPage() {
     const [asset, setAsset] = useState('USD')
     const [walletAddress, setWalletAddress] = useState('')
     const [bankDetails, setBankDetails] = useState({
-      accountName: '',
+      accountName: userData?.firstName + ' ' + userData?.lastName || '',
       accountNumber: '',
       bankName: '',
       swiftCode: '',
-      country: ''
+      country: userData?.country || ''
     })
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -894,7 +1027,7 @@ export default function DashboardPage() {
       }
       
       const data: WithdrawalRequest = {
-        userId,
+        userId: userData?.id || 'user-123',
         amount: parseFloat(amount),
         asset,
       }
@@ -973,13 +1106,15 @@ export default function DashboardPage() {
                 onChange={(e) => {
                   setAsset(e.target.value)
                   setWalletAddress('')
-                  setBankDetails({
-                    accountName: '',
-                    accountNumber: '',
-                    bankName: '',
-                    swiftCode: '',
-                    country: ''
-                  })
+                  if (e.target.value !== 'USD') {
+                    setBankDetails({
+                      accountName: userData?.firstName + ' ' + userData?.lastName || '',
+                      accountNumber: '',
+                      bankName: '',
+                      swiftCode: '',
+                      country: userData?.country || ''
+                    })
+                  }
                 }}
                 options={['USD', 'BTC', 'ETH', 'USDT']} 
                 required
