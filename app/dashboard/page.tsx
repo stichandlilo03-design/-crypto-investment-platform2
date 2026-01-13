@@ -11,7 +11,10 @@ import {
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase/client' // ADD THIS IMPORT
+import { createSupabaseClient } from '@/lib/supabase/client'
+
+// Create supabase instance
+const supabase = createSupabaseClient()
 
 // Define types based on your Supabase schema
 interface UserProfile {
@@ -112,7 +115,7 @@ export default function DashboardPage() {
       if (!user) return
 
       try {
-        // Fetch user portfolio
+        // Fetch user portfolio - Note: using user_portfolio table as defined in your SQL
         const { data: portfolioData, error: portfolioError } = await supabase
           .from('user_portfolio')
           .select('*')
