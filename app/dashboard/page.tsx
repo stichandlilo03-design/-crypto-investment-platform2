@@ -70,17 +70,16 @@ export default function DashboardPage() {
     return 'User'
   }
 
-  // Get user initials for avatar
   const getUserInitials = () => {
-    if (profile?.full_name) {
-      const names = profile.full_name.split(' ')
-      return names.map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    }
-    if (user?.email) {
-      return user.email.slice(0, 2).toUpperCase()
-    }
-    return 'U'
+  if (profile?.full_name) {
+    const names = profile.full_name.split(' ')
+    return names.map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
   }
+  if (user?.email) {
+    return user.email.slice(0, 2).toUpperCase()
+  }
+  return 'U'
+}
 
   const portfolioData = [
     { 
