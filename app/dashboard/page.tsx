@@ -675,146 +675,146 @@ export default function DashboardPage() {
   }
 
   function WithdrawTab({ onSubmit, loading, success, error, userBalance }: { 
-    onSubmit: (data: WithdrawalRequest) => void; 
-    loading: boolean;
-    success: boolean;
-    error: string;
-    userBalance: number;
-  }) {
-    const [amount, setAmount] = useState('')
-    const [asset, setAsset] = useState('USD')
-    const [walletAddress, setWalletAddress] = useState('')
+  onSubmit: (data: WithdrawalRequest) => void; 
+  loading: boolean;
+  success: boolean;
+  error: string;
+  userBalance: number;
+}) {
+  const [amount, setAmount] = useState('')
+  const [asset, setAsset] = useState('USD')
+  const [walletAddress, setWalletAddress] = useState('')
 
-    const handleSubmit = (e: React.FormEvent) => {
-      e.preventDefault()
-      
-      if (parseFloat(amount) > userBalance) {
-        alert('Amount exceeds available balance')
-        return
-      }
-      
-      onSubmit({
-        userId,
-        amount: parseFloat(amount),
-        asset,
-        walletAddress
-      })
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (parseFloat(amount) > userBalance) {
+      alert('Amount exceeds available balance')
+      return
     }
+    
+    onSubmit({
+      userId,
+      amount: parseFloat(amount),
+      asset,
+      walletAddress
+    })
+  }
 
-    return (
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-8">Withdraw Funds</h1>
-        
-        <div className="glass-effect rounded-2xl p-6 mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm">Available Balance</p>
-              <p className="text-3xl font-bold text-white">${userBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-              <Wallet className="w-6 h-6 text-white" />
-            </div>
+  return (
+    <div className="max-w-2xl mx-auto">
+      <h1 className="text-3xl font-bold text-white mb-8">Withdraw Funds</h1>
+      
+      <div className="glass-effect rounded-2xl p-6 mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-gray-400 text-sm">Available Balance</p>
+            <p className="text-3xl font-bold text-white">${userBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <Wallet className="w-6 h-6 text-white" />
           </div>
         </div>
+      </div>
+      
+      {success && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl"
+        >
+          <div className="flex items-center space-x-3">
+            <CheckCircle className="w-5 h-5 text-green-400" />
+            <div>
+              <p className="text-green-400 font-medium">Withdrawal request submitted!</p>
+              <p className="text-green-400/80 text-sm">Waiting for admin approval. You'll be notified once approved.</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {error && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
+        >
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="w-5 h-5 text-red-400" />
+            <p className="text-red-400 font-medium">{error}</p>
+          </div>
+        </motion.div>
+      )}
+
+      <div className="glass-effect rounded-2xl p-6">
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-6">
+            <FormField 
+              label="Select Asset" 
+              type="select" 
+              value={asset}
+              onChange={(e) => setAsset(e.target.value)}
+              options={['USD', 'BTC', 'ETH', 'USDT']} 
+              required
+            />
+            
+            <FormField 
+              label="Amount" 
+              type="number" 
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+              min="0"
+              max={userBalance.toString()}  // ← FIX IS HERE
+              step="0.01"
+              required
+            />
+            
+            <FormField 
+              label="Destination Wallet Address" 
+              type="text" 
+              value={walletAddress}
+              onChange={(e) => setWalletAddress(e.target.value)}
+              placeholder="Enter your wallet address"
+              required
+            />
+            
+            <button 
+              type="submit"
+              disabled={loading || !amount || !walletAddress || parseFloat(amount) > userBalance}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <span>Request Withdrawal</span>
+              )}
+            </button>
+          </div>
+        </form>
         
-        {success && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl"
-          >
-            <div className="flex items-center space-x-3">
-              <CheckCircle className="w-5 h-5 text-green-400" />
-              <div>
-                <p className="text-green-400 font-medium">Withdrawal request submitted!</p>
-                <p className="text-green-400/80 text-sm">Waiting for admin approval. You'll be notified once approved.</p>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {error && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
-          >
-            <div className="flex items-center space-x-3">
-              <AlertCircle className="w-5 h-5 text-red-400" />
-              <p className="text-red-400 font-medium">{error}</p>
-            </div>
-          </motion.div>
-        )}
-
-        <div className="glass-effect rounded-2xl p-6">
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-6">
-              <FormField 
-                label="Select Asset" 
-                type="select" 
-                value={asset}
-                onChange={(e) => setAsset(e.target.value)}
-                options={['USD', 'BTC', 'ETH', 'USDT']} 
-                required
-              />
-              
-              <FormField 
-                label="Amount" 
-                type="number" 
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                min="0"
-                max={userBalance}
-                step="0.01"
-                required
-              />
-              
-              <FormField 
-                label="Destination Wallet Address" 
-                type="text" 
-                value={walletAddress}
-                onChange={(e) => setWalletAddress(e.target.value)}
-                placeholder="Enter your wallet address"
-                required
-              />
-              
-              <button 
-                type="submit"
-                disabled={loading || !amount || !walletAddress || parseFloat(amount) > userBalance}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Processing...</span>
-                  </>
-                ) : (
-                  <span>Request Withdrawal</span>
-                )}
-              </button>
-            </div>
-          </form>
-          
-          <div className="mt-8 p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-            <div className="flex items-start space-x-3">
-              <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
-              <div>
-                <h4 className="text-yellow-400 font-semibold mb-1">Important Information</h4>
-                <ul className="text-gray-300 text-sm space-y-1">
-                  <li>• All withdrawals require admin approval</li>
-                  <li>• Processing time: 24-48 hours</li>
-                  <li>• Minimum withdrawal: $50</li>
-                  <li>• Network fees may apply for crypto withdrawals</li>
-                  <li>• Ensure wallet address is correct</li>
-                </ul>
-              </div>
+        <div className="mt-8 p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
+            <div>
+              <h4 className="text-yellow-400 font-semibold mb-1">Important Information</h4>
+              <ul className="text-gray-300 text-sm space-y-1">
+                <li>• All withdrawals require admin approval</li>
+                <li>• Processing time: 24-48 hours</li>
+                <li>• Minimum withdrawal: $50</li>
+                <li>• Network fees may apply for crypto withdrawals</li>
+                <li>• Ensure wallet address is correct</li>
+              </ul>
             </div>
           </div>
         </div>
       </div>
-    )
-  }
+    </div>
+  )
+}
 
   function TransactionsTab({ transactions }: { transactions: any[] }) {
     return (
