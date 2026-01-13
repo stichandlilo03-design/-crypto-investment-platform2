@@ -23,15 +23,162 @@ import {
   Eye,
   Edit,
   Trash2,
-  MoreVertical
+  MoreVertical,
+  Check,
+  X,
+  ExternalLink
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { formatDistanceToNow } from 'date-fns'
+
+interface Deposit {
+  id: string
+  user_id: string
+  amount: number
+  asset: string
+  tx_hash: string | null
+  payment_proof_url: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'processing'
+  admin_notes: string | null
+  created_at: string
+  users: {
+    email: string
+    full_name: string | null
+  }
+}
+
+interface Withdrawal {
+  id: string
+  user_id: string
+  amount: number
+  asset: string
+  wallet_address: string
+  status: 'pending' | 'approved' | 'rejected' | 'processing' | 'completed'
+  admin_notes: string | null
+  created_at: string
+  users: {
+    email: string
+    full_name: string | null
+  }
+}
 
 export default function AdminPage() {
   const [selectedTab, setSelectedTab] = useState('dashboard')
+  const [deposits, setDeposits] = useState<Deposit[]>([])
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedAction, setSelectedAction] = useState<{
+    type: 'deposit' | 'withdrawal'
+    id: string
+    userEmail: string
+    amount: number
+    asset: string
+  } | null>(null)
+  const [adminNotes, setAdminNotes] = useState('')
+
+  useEffect(() => {
+    fetchPendingTransactions()
+  }, [])
+
+  const fetchPendingTransactions = async () => {
+    try {
+      setLoading(true)
+      
+      const [depositsRes, withdrawalsRes] = await Promise.all([
+        fetch('/api/deposit?status=pending'),
+        fetch('/api/withdraw?status=pending')
+      ])
+
+      const depositsData = await depositsRes.json()
+      const withdrawalsData = await withdrawalsRes.json()
+
+      if (depositsData.deposits) setDeposits(depositsData.deposits)
+      if (withdrawalsData.withdrawals) setWithdrawals(withdrawalsData.withdrawals)
+    } catch (error) {
+      console.error('Error fetching transactions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApprove = async (type: 'deposit' | 'withdrawal', id: string) => {
+    try {
+      const response = await fetch('/api/admin/approve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-id': 'admin-user-id' // In real app, get from auth session
+        },
+        body: JSON.stringify({
+          type,
+          id,
+          action: 'approve',
+          adminNotes: adminNotes || null
+        })
+      })
+
+      if (response.ok) {
+        alert(`${type} approved successfully`)
+        setSelectedAction(null)
+        setAdminNotes('')
+        fetchPendingTransactions()
+      } else {
+        const error = await response.json()
+        alert(`Error: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Approval error:', error)
+      alert('Failed to approve. Please try again.')
+    }
+  }
+
+  const handleReject = async (type: 'deposit' | 'withdrawal', id: string) => {
+    try {
+      const response = await fetch('/api/admin/approve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-id': 'admin-user-id' // In real app, get from auth session
+        },
+        body: JSON.stringify({
+          type,
+          id,
+          action: 'reject',
+          adminNotes: adminNotes || null
+        })
+      })
+
+      if (response.ok) {
+        alert(`${type} rejected successfully`)
+        setSelectedAction(null)
+        setAdminNotes('')
+        fetchPendingTransactions()
+      } else {
+        const error = await response.json()
+        alert(`Error: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Rejection error:', error)
+      alert('Failed to reject. Please try again.')
+    }
+  }
 
   const stats = [
+    { 
+      label: 'Pending Deposits', 
+      value: deposits.length.toString(), 
+      change: '', 
+      icon: <Clock className="w-6 h-6" />,
+      color: 'from-yellow-500 to-orange-500'
+    },
+    { 
+      label: 'Pending Withdrawals', 
+      value: withdrawals.length.toString(), 
+      change: '', 
+      icon: <AlertCircle className="w-6 h-6" />,
+      color: 'from-red-500 to-pink-500'
+    },
     { 
       label: 'Total Users', 
       value: '52,483', 
@@ -45,189 +192,217 @@ export default function AdminPage() {
       change: '+18.2%', 
       icon: <DollarSign className="w-6 h-6" />,
       color: 'from-green-500 to-emerald-500'
-    },
-    { 
-      label: 'Active Investments', 
-      value: '18,234', 
-      change: '+8.7%', 
-      icon: <TrendingUp className="w-6 h-6" />,
-      color: 'from-purple-500 to-pink-500'
-    },
-    { 
-      label: 'Pending Transactions', 
-      value: '234', 
-      change: '-5.3%', 
-      icon: <Clock className="w-6 h-6" />,
-      color: 'from-orange-500 to-red-500'
     }
   ]
 
-  const recentUsers = [
-    { id: 1, name: 'Sarah Mitchell', email: 'sarah.m@email.com', joined: '2 hours ago', status: 'active', balance: '$12,450' },
-    { id: 2, name: 'Marcus Chen', email: 'marcus.c@email.com', joined: '5 hours ago', status: 'active', balance: '$8,920' },
-    { id: 3, name: 'Elena Rodriguez', email: 'elena.r@email.com', joined: '1 day ago', status: 'pending', balance: '$0' },
-    { id: 4, name: 'James Wilson', email: 'james.w@email.com', joined: '2 days ago', status: 'active', balance: '$25,100' },
-    { id: 5, name: 'Aisha Patel', email: 'aisha.p@email.com', joined: '3 days ago', status: 'suspended', balance: '$5,340' }
-  ]
+  const formatTimeAgo = (dateString: string) => {
+    return formatDistanceToNow(new Date(dateString), { addSuffix: true })
+  }
 
-  const recentTransactions = [
-    { 
-      id: 'TXN001', 
-      user: 'Sarah Mitchell', 
-      type: 'deposit', 
-      amount: '+$5,000', 
-      asset: 'BTC',
-      status: 'completed',
-      time: '10 mins ago'
-    },
-    { 
-      id: 'TXN002', 
-      user: 'Marcus Chen', 
-      type: 'withdrawal', 
-      amount: '-$2,500', 
-      asset: 'ETH',
-      status: 'pending',
-      time: '25 mins ago'
-    },
-    { 
-      id: 'TXN003', 
-      user: 'Elena Rodriguez', 
-      type: 'trade', 
-      amount: '$10,000', 
-      asset: 'ADA',
-      status: 'completed',
-      time: '1 hour ago'
-    },
-    { 
-      id: 'TXN004', 
-      user: 'James Wilson', 
-      type: 'deposit', 
-      amount: '+$15,000', 
-      asset: 'SOL',
-      status: 'failed',
-      time: '2 hours ago'
-    },
-    { 
-      id: 'TXN005', 
-      user: 'Aisha Patel', 
-      type: 'withdrawal', 
-      amount: '-$3,200', 
-      asset: 'BTC',
-      status: 'pending',
-      time: '3 hours ago'
-    }
-  ]
+  const renderPendingTransactions = () => (
+    <>
+      {/* Pending Deposits */}
+      <div className="glass-effect rounded-2xl p-6 mb-6">
+        <h2 className="text-2xl font-display font-bold text-white mb-6 flex items-center">
+          <Clock className="w-6 h-6 mr-2 text-yellow-400" />
+          Pending Deposits ({deposits.length})
+        </h2>
+        
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+            <p className="text-gray-400 mt-2">Loading...</p>
+          </div>
+        ) : deposits.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400">No pending deposits</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">User</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Amount</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Asset</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Proof</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Submitted</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deposits.map((deposit) => (
+                  <tr key={deposit.id} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="py-4 px-4">
+                      <div>
+                        <div className="text-white font-medium">
+                          {deposit.users.full_name || 'Unknown User'}
+                        </div>
+                        <div className="text-sm text-gray-400">{deposit.users.email}</div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="text-white font-bold">
+                        ${deposit.amount.toLocaleString()}
+                      </div>
+                      <div className="text-sm text-gray-400">{deposit.amount} {deposit.asset}</div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">
+                        {deposit.asset}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      {deposit.payment_proof_url ? (
+                        <a
+                          href={deposit.payment_proof_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center space-x-1 text-purple-400 hover:text-purple-300"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span className="text-sm">View Proof</span>
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 text-sm">No proof</span>
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-gray-400 text-sm">
+                      {formatTimeAgo(deposit.created_at)}
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedAction({
+                              type: 'deposit',
+                              id: deposit.id,
+                              userEmail: deposit.users.email,
+                              amount: deposit.amount,
+                              asset: deposit.asset
+                            })
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 text-sm font-medium transition-all flex items-center space-x-1"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Review</span>
+                        </button>
+                        <button className="p-1.5 rounded-lg hover:bg-white/10 transition-all">
+                          <Eye className="w-4 h-4 text-gray-400" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Pending Withdrawals */}
+      <div className="glass-effect rounded-2xl p-6">
+        <h2 className="text-2xl font-display font-bold text-white mb-6 flex items-center">
+          <AlertCircle className="w-6 h-6 mr-2 text-red-400" />
+          Pending Withdrawals ({withdrawals.length})
+        </h2>
+        
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+            <p className="text-gray-400 mt-2">Loading...</p>
+          </div>
+        ) : withdrawals.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400">No pending withdrawals</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">User</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Amount</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Asset</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Wallet</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Submitted</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {withdrawals.map((withdrawal) => (
+                  <tr key={withdrawal.id} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="py-4 px-4">
+                      <div>
+                        <div className="text-white font-medium">
+                          {withdrawal.users.full_name || 'Unknown User'}
+                        </div>
+                        <div className="text-sm text-gray-400">{withdrawal.users.email}</div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="text-white font-bold">
+                        ${withdrawal.amount.toLocaleString()}
+                      </div>
+                      <div className="text-sm text-gray-400">{withdrawal.amount} {withdrawal.asset}</div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">
+                        {withdrawal.asset}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="text-gray-400 text-sm font-mono max-w-[200px] truncate">
+                        {withdrawal.wallet_address}
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 text-gray-400 text-sm">
+                      {formatTimeAgo(withdrawal.created_at)}
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedAction({
+                              type: 'withdrawal',
+                              id: withdrawal.id,
+                              userEmail: withdrawal.users.email,
+                              amount: withdrawal.amount,
+                              asset: withdrawal.asset
+                            })
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 text-sm font-medium transition-all flex items-center space-x-1"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Review</span>
+                        </button>
+                        <button className="p-1.5 rounded-lg hover:bg-white/10 transition-all">
+                          <Eye className="w-4 h-4 text-gray-400" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  )
+
+  // Keep the rest of your existing admin page code, but replace the main content area
+  // with this conditional rendering:
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40">
-        <div className="flex items-center space-x-2 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <Shield className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <span className="text-xl font-display font-bold text-white block">Admin Panel</span>
-            <span className="text-xs text-gray-400">CryptoVault</span>
-          </div>
-        </div>
-
-        <nav className="space-y-2">
-          <button
-            onClick={() => setSelectedTab('dashboard')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-              selectedTab === 'dashboard' 
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-                : 'text-gray-400 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <BarChart3 className="w-5 h-5" />
-            <span className="font-medium">Dashboard</span>
-          </button>
-          <button
-            onClick={() => setSelectedTab('users')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-              selectedTab === 'users' 
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-                : 'text-gray-400 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <Users className="w-5 h-5" />
-            <span className="font-medium">Users</span>
-          </button>
-          <button
-            onClick={() => setSelectedTab('transactions')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-              selectedTab === 'transactions' 
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-                : 'text-gray-400 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <Activity className="w-5 h-5" />
-            <span className="font-medium">Transactions</span>
-          </button>
-          <button
-            onClick={() => setSelectedTab('reports')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-              selectedTab === 'reports' 
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-                : 'text-gray-400 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <FileText className="w-5 h-5" />
-            <span className="font-medium">Reports</span>
-          </button>
-          <button
-            onClick={() => setSelectedTab('settings')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-              selectedTab === 'settings' 
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-                : 'text-gray-400 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <Settings className="w-5 h-5" />
-            <span className="font-medium">Settings</span>
-          </button>
-        </nav>
-
-        <div className="absolute bottom-6 left-6 right-6">
-          <Link
-            href="/"
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-          >
-            <LogOut className="w-5 h-5" />
-            <span className="font-medium">Logout</span>
-          </Link>
-        </div>
-      </aside>
+      {/* Keep your sidebar code as is */}
 
       {/* Main Content */}
       <main className="ml-64 p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-display font-bold text-white mb-2">Admin Dashboard</h1>
-            <p className="text-gray-400">Manage users, transactions, and platform settings</p>
-          </div>
+        {/* Header - keep as is */}
 
-          <div className="flex items-center space-x-4">
-            <button className="px-4 py-2.5 rounded-xl glass-effect hover:bg-white/10 text-white transition-all flex items-center space-x-2">
-              <Download className="w-4 h-4" />
-              <span className="text-sm font-medium">Export Data</span>
-            </button>
-            
-            <button className="p-2.5 rounded-xl glass-effect hover:bg-white/10 transition-all relative">
-              <Bell className="w-5 h-5 text-white" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
-
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center cursor-pointer">
-              <span className="text-white font-bold">AD</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
+        {/* Stats Grid - updated with pending counts */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {stats.map((stat, index) => (
             <motion.div
@@ -241,9 +416,11 @@ export default function AdminPage() {
                 <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center`}>
                   {stat.icon}
                 </div>
-                <span className={`text-sm font-medium ${stat.change.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>
-                  {stat.change}
-                </span>
+                {stat.change && (
+                  <span className={`text-sm font-medium ${stat.change.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>
+                    {stat.change}
+                  </span>
+                )}
               </div>
               <div className="text-sm text-gray-400 mb-1">{stat.label}</div>
               <div className="text-3xl font-bold text-white">{stat.value}</div>
@@ -251,183 +428,91 @@ export default function AdminPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Recent Users */}
-          <div className="lg:col-span-2">
-            <div className="glass-effect rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-display font-bold text-white">Recent Users</h2>
-                <div className="flex items-center space-x-2">
-                  <div className="relative">
-                    <input
-                      type="search"
-                      placeholder="Search users..."
-                      className="w-48 pl-10 pr-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-purple-500"
-                    />
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  </div>
-                  <button className="p-2 rounded-xl glass-effect hover:bg-white/10 transition-all">
-                    <Filter className="w-4 h-4 text-white" />
-                  </button>
-                </div>
-              </div>
+        {/* Main content area - show pending transactions */}
+        {selectedTab === 'dashboard' && renderPendingTransactions()}
 
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">User</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Joined</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Balance</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Status</th>
-                      <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentUsers.map((user, index) => (
-                      <motion.tr
-                        key={user.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="border-b border-white/5 hover:bg-white/5 transition-all"
-                      >
-                        <td className="py-4 px-4">
-                          <div>
-                            <div className="text-white font-medium">{user.name}</div>
-                            <div className="text-sm text-gray-400">{user.email}</div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 text-gray-400 text-sm">{user.joined}</td>
-                        <td className="py-4 px-4 text-white font-medium">{user.balance}</td>
-                        <td className="py-4 px-4">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            user.status === 'active' ? 'bg-green-500/20 text-green-400' :
-                            user.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                            'bg-red-500/20 text-red-400'
-                          }`}>
-                            {user.status}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center justify-end space-x-2">
-                            <button className="p-2 rounded-lg hover:bg-white/10 transition-all">
-                              <Eye className="w-4 h-4 text-gray-400" />
-                            </button>
-                            <button className="p-2 rounded-lg hover:bg-white/10 transition-all">
-                              <Edit className="w-4 h-4 text-gray-400" />
-                            </button>
-                            <button className="p-2 rounded-lg hover:bg-white/10 transition-all">
-                              <MoreVertical className="w-4 h-4 text-gray-400" />
-                            </button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/10">
-                <span className="text-sm text-gray-400">Showing 5 of 52,483 users</span>
-                <div className="flex items-center space-x-2">
-                  <button className="px-4 py-2 rounded-lg glass-effect hover:bg-white/10 text-white text-sm transition-all">
-                    Previous
-                  </button>
-                  <button className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm transition-all">
-                    Next
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Transactions */}
-          <div>
-            <div className="glass-effect rounded-2xl p-6 mb-6">
-              <h2 className="text-xl font-display font-bold text-white mb-6">Recent Transactions</h2>
-              
-              <div className="space-y-3">
-                {recentTransactions.slice(0, 5).map((tx, index) => (
-                  <motion.div
-                    key={tx.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-all"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-white font-medium text-sm">{tx.user}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        tx.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                        tx.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                        'bg-red-500/20 text-red-400'
-                      }`}>
-                        {tx.status}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-400">{tx.type} • {tx.asset}</span>
-                      <span className={`font-semibold ${
-                        tx.type === 'deposit' ? 'text-green-400' :
-                        tx.type === 'withdrawal' ? 'text-red-400' :
-                        'text-blue-400'
-                      }`}>
-                        {tx.amount}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">{tx.time}</div>
-                  </motion.div>
-                ))}
-              </div>
-
-              <button className="w-full mt-4 py-2.5 rounded-xl glass-effect hover:bg-white/10 text-white text-sm font-medium transition-all">
-                View All Transactions
-              </button>
-            </div>
-
-            {/* System Status */}
-            <div className="glass-effect rounded-2xl p-6">
-              <h2 className="text-xl font-display font-bold text-white mb-6">System Status</h2>
-              
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">API Status</span>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-green-400 text-sm font-medium">Operational</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Database</span>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-green-400 text-sm font-medium">Healthy</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Payment Gateway</span>
-                  <div className="flex items-center space-x-2">
-                    <AlertCircle className="w-4 h-4 text-yellow-400" />
-                    <span className="text-yellow-400 text-sm font-medium">Degraded</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Security</span>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-green-400 text-sm font-medium">Secure</span>
-                  </div>
-                </div>
-              </div>
-
-              <button className="w-full mt-6 py-2.5 rounded-xl glass-effect hover:bg-white/10 text-white text-sm font-medium transition-all">
-                View Detailed Report
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* Add other tabs rendering as needed */}
       </main>
+
+      {/* Approval Modal */}
+      {selectedAction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="glass-effect rounded-2xl p-6 max-w-md w-full"
+          >
+            <h3 className="text-xl font-bold text-white mb-2">
+              Review {selectedAction.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
+            </h3>
+            
+            <div className="space-y-4 my-6">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">User</label>
+                <div className="text-white font-medium">{selectedAction.userEmail}</div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Amount</label>
+                  <div className="text-white font-bold">${selectedAction.amount.toLocaleString()}</div>
+                  <div className="text-sm text-gray-400">{selectedAction.amount} {selectedAction.asset}</div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Type</label>
+                  <span className={`px-3 py-1 rounded-full text-xs ${
+                    selectedAction.type === 'deposit' 
+                      ? 'bg-green-500/20 text-green-400' 
+                      : 'bg-red-500/20 text-red-400'
+                  }`}>
+                    {selectedAction.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Admin Notes (Optional)</label>
+                <textarea
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  className="w-full px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+                  rows={3}
+                  placeholder="Add notes about this transaction..."
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setSelectedAction(null)
+                  setAdminNotes('')
+                }}
+                className="px-4 py-2 rounded-xl glass-effect hover:bg-white/10 text-white transition-all"
+              >
+                Cancel
+              </button>
+              
+              <button
+                onClick={() => handleReject(selectedAction.type, selectedAction.id)}
+                className="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all flex items-center space-x-2"
+              >
+                <X className="w-4 h-4" />
+                <span>Reject</span>
+              </button>
+              
+              <button
+                onClick={() => handleApprove(selectedAction.type, selectedAction.id)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:opacity-90 transition-all flex items-center space-x-2"
+              >
+                <Check className="w-4 h-4" />
+                <span>Approve</span>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }
