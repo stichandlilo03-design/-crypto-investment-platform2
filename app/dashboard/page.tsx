@@ -8,12 +8,34 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
+// Define types for crypto prices
+interface CryptoPrice {
+  usd: number;
+  usd_24h_change: number;
+}
+
+interface CryptoPrices {
+  [key: string]: CryptoPrice;
+}
+
+// Define types for portfolio data
+interface PortfolioAsset {
+  name: string;
+  symbol: string;
+  amount: number;
+  coinGeckoId: string;
+  color: string;
+  value: number;
+  change: number;
+  trend: 'up' | 'down';
+}
+
 export default function DashboardPage() {
   const [hideBalance, setHideBalance] = useState(false)
   const [selectedTab, setSelectedTab] = useState('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [cryptoPrices, setCryptoPrices] = useState({})
+  const [cryptoPrices, setCryptoPrices] = useState<CryptoPrices>({})
   const [loading, setLoading] = useState(true)
 
   // Fetch real crypto prices
@@ -37,12 +59,19 @@ export default function DashboardPage() {
   }, [])
 
   // Mock user holdings - would come from database
-  const holdings = { bitcoin: 2.5847, ethereum: 15.2341, cardano: 50000, solana: 125.5 }
+  const holdings: { [key: string]: number } = { 
+    bitcoin: 2.5847, 
+    ethereum: 15.2341, 
+    cardano: 50000, 
+    solana: 125.5 
+  }
   
-  const calculateBalance = () => {
+  const calculateBalance = (): number => {
     let total = 0
     Object.keys(holdings).forEach(coin => {
-      if (cryptoPrices[coin]) total += holdings[coin] * cryptoPrices[coin].usd
+      if (cryptoPrices[coin]) {
+        total += holdings[coin] * cryptoPrices[coin].usd
+      }
     })
     return total
   }
@@ -51,12 +80,12 @@ export default function DashboardPage() {
   const userProfit = userBalance * 0.327 // 32.7% gain
 
   const notifications = [
-    { id: 1, type: 'deposit', title: 'Deposit Approved', message: 'Your BTC deposit of 0.5 BTC approved', time: '2h ago', read: false },
-    { id: 2, type: 'profit', title: 'Portfolio Up 5%', message: 'Your portfolio gained $9,850', time: '4h ago', read: false },
-    { id: 3, type: 'withdraw', title: 'Withdrawal Pending', message: 'Withdrawal under review', time: '1d ago', read: true },
+    { id: 1, type: 'deposit' as const, title: 'Deposit Approved', message: 'Your BTC deposit of 0.5 BTC approved', time: '2h ago', read: false },
+    { id: 2, type: 'profit' as const, title: 'Portfolio Up 5%', message: 'Your portfolio gained $9,850', time: '4h ago', read: false },
+    { id: 3, type: 'withdraw' as const, title: 'Withdrawal Pending', message: 'Withdrawal under review', time: '1d ago', read: true },
   ]
 
-  const portfolioData = [
+  const portfolioData: PortfolioAsset[] = [
     { name: 'Bitcoin', symbol: 'BTC', amount: 2.5847, coinGeckoId: 'bitcoin', color: 'from-orange-500 to-yellow-500' },
     { name: 'Ethereum', symbol: 'ETH', amount: 15.2341, coinGeckoId: 'ethereum', color: 'from-blue-500 to-purple-500' },
     { name: 'Cardano', symbol: 'ADA', amount: 50000, coinGeckoId: 'cardano', color: 'from-green-500 to-emerald-500' },
@@ -65,7 +94,12 @@ export default function DashboardPage() {
     const price = cryptoPrices[asset.coinGeckoId]
     const value = price ? asset.amount * price.usd : 0
     const change = price ? price.usd_24h_change : 0
-    return { ...asset, value, change, trend: change >= 0 ? 'up' : 'down' }
+    return { 
+      ...asset, 
+      value, 
+      change, 
+      trend: change >= 0 ? 'up' as const : 'down' as const 
+    }
   })
 
   const NavItems = () => (
@@ -314,9 +348,9 @@ export default function DashboardPage() {
 
   function TransactionsTab() {
     const txns = [
-      { type: 'Deposit', asset: 'BTC', amount: '+0.5', value: '$20,450', status: 'Completed', date: '2024-01-10' },
-      { type: 'Withdrawal', asset: 'ETH', amount: '-2.0', value: '-$6,400', status: 'Pending', date: '2024-01-09' },
-      { type: 'Buy', asset: 'ADA', amount: '+5000', value: '$2,550', status: 'Completed', date: '2024-01-08' },
+      { type: 'Deposit', asset: 'BTC', amount: '+0.5', value: '$20,450', status: 'Completed' as const, date: '2024-01-10' },
+      { type: 'Withdrawal', asset: 'ETH', amount: '-2.0', value: '-$6,400', status: 'Pending' as const, date: '2024-01-09' },
+      { type: 'Buy', asset: 'ADA', amount: '+5000', value: '$2,550', status: 'Completed' as const, date: '2024-01-08' },
     ]
     return (
       <div>
@@ -357,7 +391,7 @@ export default function DashboardPage() {
     )
   }
 
-  function MarketsTab({ prices }) {
+  function MarketsTab({ prices }: { prices: CryptoPrices }) {
     return (
       <div>
         <h1 className="text-3xl font-bold text-white mb-8">Crypto Markets</h1>
@@ -376,7 +410,7 @@ export default function DashboardPage() {
     )
   }
 
-  function PortfolioTab({ data, hide }) {
+  function PortfolioTab({ data, hide }: { data: PortfolioAsset[], hide: boolean }) {
     return (
       <div>
         <h1 className="text-3xl font-bold text-white mb-8">Portfolio Details</h1>
@@ -406,7 +440,14 @@ export default function DashboardPage() {
   }
 }
 
-function StatCard({ title, value, change, subtitle, icon, color = 'green' }) {
+function StatCard({ title, value, change, subtitle, icon, color = 'green' }: { 
+  title: string; 
+  value: string; 
+  change?: string; 
+  subtitle?: string; 
+  icon: React.ReactNode; 
+  color?: string 
+}) {
   return (
     <div className="p-6 rounded-2xl glass-effect hover:bg-white/5">
       <div className="flex justify-between mb-4">
@@ -420,7 +461,12 @@ function StatCard({ title, value, change, subtitle, icon, color = 'green' }) {
   )
 }
 
-function DepositMethod({ icon, title, desc, color }) {
+function DepositMethod({ icon, title, desc, color }: { 
+  icon: string; 
+  title: string; 
+  desc: string; 
+  color: string 
+}) {
   return (
     <div className="p-6 bg-white/5 rounded-xl hover:bg-white/10 cursor-pointer border-2 border-transparent hover:border-purple-500">
       <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center mb-4 text-2xl`}>
@@ -435,11 +481,16 @@ function DepositMethod({ icon, title, desc, color }) {
   )
 }
 
-function FormField({ label, type, placeholder, options }) {
+function FormField({ label, type, placeholder, options }: { 
+  label: string; 
+  type: string; 
+  placeholder?: string; 
+  options?: string[] 
+}) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-400 mb-2">{label}</label>
-      {type === 'select' ? (
+      {type === 'select' && options ? (
         <select className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white">
           {options.map(opt => <option key={opt}>{opt}</option>)}
         </select>
