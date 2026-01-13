@@ -2,13 +2,14 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  Wallet, ArrowUpRight, ArrowDownRight, DollarSign,
-  PieChart, Activity, Settings, LogOut, Bell, Search, Download, Upload,
-  Eye, EyeOff, History, UserCircle, Menu, X, Check, Clock, AlertCircle, FileText,
-  CheckCircle, Loader2, Copy, ExternalLink, CreditCard, Building, Globe,
-  Mail, Phone, MapPin, User, Shield, HelpCircle
+  Wallet, ArrowUpRight, ArrowDownRight,
+  PieChart, Activity, Settings, LogOut, Bell, Download, Upload,
+  Eye, EyeOff, History, Menu, X, Check, AlertCircle, FileText,
+  CheckCircle, Loader2, Copy, Building, Globe,
+  User, Shield, HelpCircle
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 
 // Define types
 interface CryptoPrice {
@@ -99,50 +100,22 @@ export default function DashboardPage() {
     { id: 3, type: 'warning' as const, title: 'Security Alert', message: 'Please enable 2FA for better security', time: '1 day ago', read: true },
   ])
 
-  // Fetch user data (real implementation)
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        // In real app, fetch from your API
-        // const response = await fetch(`/api/user/${userId}`)
-        // const data = await response.json()
-        
-        // Get user from localStorage or session (mock)
-        const storedUser = localStorage.getItem('cryptovault_user')
-        if (storedUser) {
-          setUserData(JSON.parse(storedUser))
-        } else {
-          // Create mock user if not exists
-          const mockUser: UserData = {
-            id: 'user-' + Math.random().toString(36).substr(2, 9),
-            email: '',
-            firstName: '',
-            lastName: '',
-            balance: 0,
-            totalDeposits: 0,
-            totalWithdrawals: 0,
-            phone: '',
-            country: ''
-          }
-          
-          // Ask for user details
-          const firstName = prompt('Enter your first name:') || 'User'
-          const lastName = prompt('Enter your last name:') || ''
-          const email = prompt('Enter your email:') || 'user@example.com'
-          
-          mockUser.firstName = firstName
-          mockUser.lastName = lastName
-          mockUser.email = email
-          
-          localStorage.setItem('cryptovault_user', JSON.stringify(mockUser))
-          setUserData(mockUser)
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error)
-      }
-    }
+  const router = useRouter()
 
-    fetchUserData()
+  // Mock user data - IN REAL APP, GET FROM SUPABASE/AUTH
+  useEffect(() => {
+    const mockUser: UserData = {
+      id: 'user-123',
+      email: 'john.doe@example.com',
+      firstName: 'John',
+      lastName: 'Doe',
+      balance: 0,
+      totalDeposits: 0,
+      totalWithdrawals: 0,
+      phone: '+1 (555) 123-4567',
+      country: 'United States'
+    }
+    setUserData(mockUser)
   }, [])
 
   // Fetch real crypto prices
@@ -227,14 +200,6 @@ export default function DashboardPage() {
       
       setDepositSuccess(true)
       
-      // Update user data locally
-      if (userData) {
-        setUserData({
-          ...userData,
-          totalDeposits: userData.totalDeposits + data.amount
-        })
-      }
-      
       // Add to transactions
       setTransactions(prev => [{
         id: `deposit-${Date.now()}`,
@@ -292,15 +257,6 @@ export default function DashboardPage() {
       
       setWithdrawSuccess(true)
       
-      // Update user balance locally
-      if (userData) {
-        setUserData({
-          ...userData,
-          balance: userData.balance - data.amount,
-          totalWithdrawals: userData.totalWithdrawals + data.amount
-        })
-      }
-      
       // Add to transactions
       setTransactions(prev => [{
         id: `withdraw-${Date.now()}`,
@@ -328,8 +284,8 @@ export default function DashboardPage() {
 
   // Handle logout
   const handleLogout = () => {
-    localStorage.removeItem('cryptovault_user')
-    window.location.href = '/'
+    // In real app, call Supabase logout
+    router.push('/')
   }
 
   // Copy wallet address to clipboard
@@ -368,6 +324,17 @@ export default function DashboardPage() {
       ))}
     </nav>
   )
+
+  if (!userData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
@@ -441,11 +408,7 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-3xl font-bold text-white">Dashboard</h1>
               <p className="text-gray-400">
-                {userData ? (
-                  userData.firstName ? 
-                    `Welcome back, ${userData.firstName}!` : 
-                    `Welcome back, ${userData.email.split('@')[0]}!`
-                ) : 'Welcome back!'}
+                Welcome back, {userData.firstName}!
               </p>
             </div>
           </div>
@@ -491,12 +454,6 @@ export default function DashboardPage() {
                         <div 
                           key={notification.id} 
                           className={`p-3 rounded-xl ${notification.read ? 'bg-white/5' : 'bg-purple-500/10'} hover:bg-white/10 transition-all`}
-                          onClick={() => {
-                            // Mark as read on click
-                            if (!notification.read) {
-                              // In real app, update via API
-                            }
-                          }}
                         >
                           <div className="flex items-start space-x-3">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -541,8 +498,7 @@ export default function DashboardPage() {
             {/* User Avatar */}
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold">
-                {userData?.firstName?.charAt(0)?.toUpperCase() || 
-                 userData?.email?.charAt(0)?.toUpperCase() || 'U'}
+                {userData.firstName?.charAt(0)?.toUpperCase() || 'U'}
               </span>
             </div>
           </div>
@@ -550,8 +506,8 @@ export default function DashboardPage() {
 
         {/* Content Tabs */}
         {selectedTab === 'overview' && <OverviewTab userData={userData} hideBalance={hideBalance} />}
-        {selectedTab === 'deposit' && <DepositTab onSubmit={handleDeposit} loading={depositLoading} success={depositSuccess} error={depositError} paymentProofFile={paymentProofFile} paymentProofPreview={paymentProofPreview} onFileUpload={handleFileUpload} />}
-        {selectedTab === 'withdraw' && <WithdrawTab onSubmit={handleWithdrawal} loading={withdrawLoading} success={withdrawSuccess} error={withdrawError} userBalance={userData?.balance || 0} />}
+        {selectedTab === 'deposit' && <DepositTab onSubmit={handleDeposit} loading={depositLoading} success={depositSuccess} error={depositError} paymentProofFile={paymentProofFile} paymentProofPreview={paymentProofPreview} onFileUpload={handleFileUpload} userId={userData.id} />}
+        {selectedTab === 'withdraw' && <WithdrawTab onSubmit={handleWithdrawal} loading={withdrawLoading} success={withdrawSuccess} error={withdrawError} userBalance={userData?.balance || 0} userId={userData.id} userData={userData} />}
         {selectedTab === 'transactions' && <TransactionsTab transactions={transactions} />}
         {selectedTab === 'markets' && <MarketsTab prices={cryptoPrices} />}
         {selectedTab === 'settings' && <SettingsTab userData={userData} />}
@@ -559,7 +515,7 @@ export default function DashboardPage() {
     </div>
   )
 
-  function OverviewTab({ userData, hideBalance }: { userData: UserData | null, hideBalance: boolean }) {
+  function OverviewTab({ userData, hideBalance }: { userData: UserData, hideBalance: boolean }) {
     return (
       <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -649,7 +605,7 @@ export default function DashboardPage() {
     )
   }
 
-  function DepositTab({ onSubmit, loading, success, error, paymentProofFile, paymentProofPreview, onFileUpload }: { 
+  function DepositTab({ onSubmit, loading, success, error, paymentProofFile, paymentProofPreview, onFileUpload, userId }: { 
     onSubmit: (data: DepositRequest) => void; 
     loading: boolean;
     success: boolean;
@@ -657,6 +613,7 @@ export default function DashboardPage() {
     paymentProofFile: File | null;
     paymentProofPreview: string | null;
     onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    userId: string;
   }) {
     const [amount, setAmount] = useState('')
     const [asset, setAsset] = useState('USD')
@@ -678,7 +635,7 @@ export default function DashboardPage() {
       }
       
       onSubmit({
-        userId: userData?.id || 'user-123',
+        userId,
         amount: parseFloat(amount),
         asset,
         paymentMethod,
@@ -1000,12 +957,14 @@ export default function DashboardPage() {
     )
   }
 
-  function WithdrawTab({ onSubmit, loading, success, error, userBalance }: { 
+  function WithdrawTab({ onSubmit, loading, success, error, userBalance, userId, userData }: { 
     onSubmit: (data: WithdrawalRequest) => void; 
     loading: boolean;
     success: boolean;
     error: string;
     userBalance: number;
+    userId: string;
+    userData: UserData;
   }) {
     const [amount, setAmount] = useState('')
     const [asset, setAsset] = useState('USD')
@@ -1027,7 +986,7 @@ export default function DashboardPage() {
       }
       
       const data: WithdrawalRequest = {
-        userId: userData?.id || 'user-123',
+        userId,
         amount: parseFloat(amount),
         asset,
       }
@@ -1106,15 +1065,6 @@ export default function DashboardPage() {
                 onChange={(e) => {
                   setAsset(e.target.value)
                   setWalletAddress('')
-                  if (e.target.value !== 'USD') {
-                    setBankDetails({
-                      accountName: userData?.firstName + ' ' + userData?.lastName || '',
-                      accountNumber: '',
-                      bankName: '',
-                      swiftCode: '',
-                      country: userData?.country || ''
-                    })
-                  }
                 }}
                 options={['USD', 'BTC', 'ETH', 'USDT']} 
                 required
@@ -1315,7 +1265,7 @@ export default function DashboardPage() {
     )
   }
 
-  function SettingsTab({ userData }: { userData: UserData | null }) {
+  function SettingsTab({ userData }: { userData: UserData }) {
     return (
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-8">Settings</h1>
@@ -1356,26 +1306,6 @@ export default function DashboardPage() {
                 readOnly
               />
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Phone Number</label>
-              <input
-                type="tel"
-                value={userData?.phone || ''}
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
-                readOnly
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Country</label>
-              <input
-                type="text"
-                value={userData?.country || ''}
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
-                readOnly
-              />
-            </div>
           </div>
         </div>
         
@@ -1395,26 +1325,6 @@ export default function DashboardPage() {
                 <span className="text-gray-400">Disabled</span>
               </div>
             </button>
-            
-            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">Change Password</p>
-                  <p className="text-gray-400 text-sm">Update your password regularly</p>
-                </div>
-                <ArrowUpRight className="w-5 h-5 text-gray-400" />
-              </div>
-            </button>
-            
-            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">Login History</p>
-                  <p className="text-gray-400 text-sm">View recent login activity</p>
-                </div>
-                <ArrowUpRight className="w-5 h-5 text-gray-400" />
-              </div>
-            </button>
           </div>
         </div>
         
@@ -1430,26 +1340,6 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-white font-medium">Contact Support</p>
                   <p className="text-gray-400 text-sm">Get help from our support team</p>
-                </div>
-                <ArrowUpRight className="w-5 h-5 text-gray-400" />
-              </div>
-            </button>
-            
-            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">FAQ</p>
-                  <p className="text-gray-400 text-sm">Frequently asked questions</p>
-                </div>
-                <ArrowUpRight className="w-5 h-5 text-gray-400" />
-              </div>
-            </button>
-            
-            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">Documentation</p>
-                  <p className="text-gray-400 text-sm">User guides and tutorials</p>
                 </div>
                 <ArrowUpRight className="w-5 h-5 text-gray-400" />
               </div>
