@@ -1,253 +1,345 @@
-dashboard 
-
-
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  TrendingUp, 
-  TrendingDown,
-  Wallet, 
-  ArrowUpRight,
-  ArrowDownRight,
-  DollarSign,
-  PieChart,
-  Activity,
-  Settings,
-  LogOut,
-  Bell,
-  Search,
-  Plus,
-  Download,
-  Upload,
-  Eye,
-  EyeOff,
-  History,
-  UserCircle,
-  Menu,
-  X
+  Wallet, ArrowUpRight, ArrowDownRight, DollarSign,
+  PieChart, Activity, Settings, LogOut, Bell, Search, Download, Upload,
+  Eye, EyeOff, History, UserCircle, Menu, X, Check, Clock, AlertCircle, FileText,
+  CheckCircle, Loader2, Copy, ExternalLink, CreditCard, Building, Globe,
+  Mail, Phone, MapPin, User, Shield, HelpCircle
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
+
+// Define types
+interface CryptoPrice {
+  usd: number;
+  usd_24h_change: number;
+}
+
+interface CryptoPrices {
+  [key: string]: CryptoPrice;
+}
+
+interface DepositRequest {
+  userId: string;
+  amount: number;
+  asset: string;
+  paymentMethod: 'wire' | 'crypto';
+  walletAddress?: string;
+  txHash?: string;
+  paymentProof?: File | string;
+}
+
+interface WithdrawalRequest {
+  userId: string;
+  amount: number;
+  asset: string;
+  walletAddress?: string;
+  bankDetails?: {
+    accountName: string;
+    accountNumber: string;
+    bankName: string;
+    swiftCode: string;
+    country: string;
+  };
+}
+
+interface UserData {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  balance: number;
+  totalDeposits: number;
+  totalWithdrawals: number;
+  phone?: string;
+  country?: string;
+}
+
+// Demo wallet addresses (replace with real ones)
+const DEMO_WALLETS = {
+  BTC: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+  ETH: '0x742d35Cc6634C0532925a3b844Bc9e70C6d4e5a1',
+  USDT: 'TBA6C4H5G7J8K9L0M1N2P3Q4R5S6T7U8V9W0',
+  USD: 'Bank Transfer Only'
+}
+
+// Demo wire transfer details (replace with your details)
+const WIRE_TRANSFER_DETAILS = {
+  bankName: 'JPMorgan Chase Bank',
+  accountName: 'CRYPTOVAULT TRADING LTD',
+  accountNumber: '9876543210',
+  routingNumber: '021000021',
+  swiftCode: 'CHASUS33',
+  iban: 'US70000000000000000000',
+  address: '383 Madison Avenue, New York, NY 10017, USA',
+  reference: 'DEPOSIT-USERID'
+}
 
 export default function DashboardPage() {
-  const { user, profile, loading, signOut } = useAuth()
-  const router = useRouter()
   const [hideBalance, setHideBalance] = useState(false)
   const [selectedTab, setSelectedTab] = useState('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [cryptoPrices, setCryptoPrices] = useState<CryptoPrices>({})
+  const [loading, setLoading] = useState(true)
+  const [depositLoading, setDepositLoading] = useState(false)
+  const [withdrawLoading, setWithdrawLoading] = useState(false)
+  const [depositSuccess, setDepositSuccess] = useState(false)
+  const [withdrawSuccess, setWithdrawSuccess] = useState(false)
+  const [depositError, setDepositError] = useState('')
+  const [withdrawError, setWithdrawError] = useState('')
+  const [userData, setUserData] = useState<UserData | null>(null)
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
+  const [paymentProofPreview, setPaymentProofPreview] = useState<string | null>(null)
 
-  // Redirect to login if not authenticated
+  // Mock user ID - in real app, get from auth
+  const userId = 'user-123'
+
+  // Fetch user data (real implementation)
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login')
+    const fetchUserData = async () => {
+      try {
+        // In real app, fetch from your API
+        // const response = await fetch(`/api/user/${userId}`)
+        // const data = await response.json()
+        
+        // Mock data - replace with real API call
+        setUserData({
+          id: userId,
+          email: 'john.doe@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          balance: 0,
+          totalDeposits: 0,
+          totalWithdrawals: 0,
+          phone: '+1 (555) 123-4567',
+          country: 'United States'
+        })
+      } catch (error) {
+        console.error('Error fetching user data:', error)
+      }
     }
-  }, [user, loading, router])
 
-  // Handle logout
-  const handleLogout = async () => {
-    await signOut()
+    fetchUserData()
+  }, [userId])
+
+  // Fetch real crypto prices
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        const response = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether&vs_currencies=usd&include_24hr_change=true&x_cg_demo_api_key=CG-YnK9oBCYZL6hmz6g7R8HtqBm'
+        )
+        const data = await response.json()
+        setCryptoPrices(data)
+      } catch (error) {
+        console.error('Error:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchPrices()
+    const interval = setInterval(fetchPrices, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Handle file upload for payment proof
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      alert('Please upload an image or PDF file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB')
+      return
+    }
+
+    setPaymentProofFile(file)
+
+    // Create preview for images
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setPaymentProofPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    } else {
+      setPaymentProofPreview(null)
+    }
   }
 
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    )
+  // Handle deposit submission
+  const handleDeposit = async (data: DepositRequest) => {
+    setDepositLoading(true)
+    setDepositError('')
+    setDepositSuccess(false)
+    
+    try {
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('userId', data.userId)
+      formData.append('amount', data.amount.toString())
+      formData.append('asset', data.asset)
+      formData.append('paymentMethod', data.paymentMethod)
+      
+      if (data.txHash) formData.append('txHash', data.txHash)
+      if (data.walletAddress) formData.append('walletAddress', data.walletAddress)
+      if (paymentProofFile) formData.append('paymentProof', paymentProofFile)
+      
+      const response = await fetch('/api/deposit', {
+        method: 'POST',
+        body: formData
+      })
+      
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Deposit failed')
+      }
+      
+      setDepositSuccess(true)
+      
+      // Update user data locally
+      if (userData) {
+        setUserData({
+          ...userData,
+          totalDeposits: userData.totalDeposits + data.amount
+        })
+      }
+      
+      // Add to transactions
+      setTransactions(prev => [{
+        id: `deposit-${Date.now()}`,
+        type: 'deposit',
+        asset: data.asset,
+        amount: `+${data.amount}`,
+        value: `$${data.amount}`,
+        status: 'Pending',
+        date: new Date().toISOString().split('T')[0],
+        method: data.paymentMethod === 'wire' ? 'Wire Transfer' : 'Crypto'
+      }, ...prev])
+      
+      // Reset form after success
+      setTimeout(() => {
+        setDepositSuccess(false)
+        setSelectedTab('overview')
+        setPaymentProofFile(null)
+        setPaymentProofPreview(null)
+      }, 5000)
+      
+    } catch (error) {
+      setDepositError(error instanceof Error ? error.message : 'Deposit failed')
+    } finally {
+      setDepositLoading(false)
+    }
   }
 
-  // Don't render if no user
-  if (!user) {
-    return null
+  // Handle withdrawal submission
+  const handleWithdrawal = async (data: WithdrawalRequest) => {
+    setWithdrawLoading(true)
+    setWithdrawError('')
+    setWithdrawSuccess(false)
+    
+    // Check if user has sufficient balance
+    if (userData && userData.balance < data.amount) {
+      setWithdrawError('Insufficient balance')
+      setWithdrawLoading(false)
+      return
+    }
+    
+    try {
+      const response = await fetch('/api/withdraw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      })
+      
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Withdrawal failed')
+      }
+      
+      setWithdrawSuccess(true)
+      
+      // Update user balance locally
+      if (userData) {
+        setUserData({
+          ...userData,
+          balance: userData.balance - data.amount,
+          totalWithdrawals: userData.totalWithdrawals + data.amount
+        })
+      }
+      
+      // Add to transactions
+      setTransactions(prev => [{
+        id: `withdraw-${Date.now()}`,
+        type: 'withdrawal',
+        asset: data.asset,
+        amount: `-${data.amount}`,
+        value: `-$${data.amount}`,
+        status: 'Pending',
+        date: new Date().toISOString().split('T')[0],
+        method: data.asset === 'USD' ? 'Bank Transfer' : 'Crypto'
+      }, ...prev])
+      
+      // Reset form after success
+      setTimeout(() => {
+        setWithdrawSuccess(false)
+        setSelectedTab('overview')
+      }, 5000)
+      
+    } catch (error) {
+      setWithdrawError(error instanceof Error ? error.message : 'Withdrawal failed')
+    } finally {
+      setWithdrawLoading(false)
+    }
   }
 
-  // Get user's name from profile or email
-  const getUserName = () => {
-    if (profile?.full_name) {
-      return profile.full_name.split(' ')[0]
-    }
-    if (user?.email) {
-      return user.email.split('@')[0]
-    }
-    return 'User'
+  // Copy wallet address to clipboard
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        alert('Copied to clipboard!')
+      })
+      .catch(err => {
+        console.error('Failed to copy:', err)
+      })
   }
-
-  const getUserInitials = () => {
-    if (profile?.full_name) {
-      const names = profile.full_name.split(' ')
-      return names.map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
-    }
-    if (user?.email) {
-      return user.email.slice(0, 2).toUpperCase()
-    }
-    return 'U'
-  }
-
-  const portfolioData = [
-    { 
-      name: 'Bitcoin', 
-      symbol: 'BTC', 
-      amount: '2.5847',
-      value: '$105,234.50',
-      change: '+12.34%',
-      changeValue: '+$13,456',
-      trend: 'up',
-      color: 'from-orange-500 to-yellow-500',
-      sparkline: [40, 45, 42, 48, 50, 55, 58, 60]
-    },
-    { 
-      name: 'Ethereum', 
-      symbol: 'ETH', 
-      amount: '15.2341',
-      value: '$48,723.40',
-      change: '+8.67%',
-      changeValue: '+$3,890',
-      trend: 'up',
-      color: 'from-blue-500 to-purple-500',
-      sparkline: [30, 32, 35, 33, 38, 40, 42, 45]
-    },
-    { 
-      name: 'Cardano', 
-      symbol: 'ADA', 
-      amount: '50000',
-      value: '$25,500.00',
-      change: '+15.23%',
-      changeValue: '+$3,367',
-      trend: 'up',
-      color: 'from-green-500 to-emerald-500',
-      sparkline: [20, 22, 21, 25, 28, 30, 32, 35]
-    },
-    { 
-      name: 'Solana', 
-      symbol: 'SOL', 
-      amount: '125.5',
-      value: '$18,825.00',
-      change: '-2.45%',
-      changeValue: '-$473',
-      trend: 'down',
-      color: 'from-purple-500 to-pink-500',
-      sparkline: [35, 33, 30, 28, 29, 27, 26, 25]
-    }
-  ]
-
-  const recentTransactions = [
-    {
-      type: 'deposit',
-      asset: 'Bitcoin',
-      symbol: 'BTC',
-      amount: '+0.5 BTC',
-      value: '+$20,450',
-      date: '2 hours ago',
-      status: 'completed'
-    },
-    {
-      type: 'withdraw',
-      asset: 'Ethereum',
-      symbol: 'ETH',
-      amount: '-2.0 ETH',
-      value: '-$6,400',
-      date: '5 hours ago',
-      status: 'completed'
-    },
-    {
-      type: 'trade',
-      asset: 'Cardano',
-      symbol: 'ADA',
-      amount: '+5000 ADA',
-      value: '+$2,550',
-      date: '1 day ago',
-      status: 'completed'
-    },
-    {
-      type: 'deposit',
-      asset: 'Solana',
-      symbol: 'SOL',
-      amount: '+25 SOL',
-      value: '+$3,750',
-      date: '2 days ago',
-      status: 'pending'
-    }
-  ]
-
-  const quickActions = [
-    { icon: <Upload className="w-5 h-5 sm:w-6 sm:h-6" />, label: 'Deposit', color: 'from-green-500 to-emerald-500' },
-    { icon: <Download className="w-5 h-5 sm:w-6 sm:h-6" />, label: 'Withdraw', color: 'from-red-500 to-pink-500' },
-    { icon: <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6" />, label: 'Buy', color: 'from-blue-500 to-cyan-500' },
-    { icon: <ArrowDownRight className="w-5 h-5 sm:w-6 sm:h-6" />, label: 'Sell', color: 'from-orange-500 to-yellow-500' }
-  ]
 
   const NavItems = () => (
     <nav className="space-y-2">
-      <button
-        onClick={() => { setSelectedTab('overview'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'overview' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <PieChart className="w-5 h-5" />
-        <span className="font-medium">Overview</span>
-      </button>
-      <button
-        onClick={() => { setSelectedTab('portfolio'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'portfolio' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <Wallet className="w-5 h-5" />
-        <span className="font-medium">Portfolio</span>
-      </button>
-      <button
-        onClick={() => { setSelectedTab('transactions'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'transactions' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <History className="w-5 h-5" />
-        <span className="font-medium">Transactions</span>
-      </button>
-      <button
-        onClick={() => { setSelectedTab('markets'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'markets' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <Activity className="w-5 h-5" />
-        <span className="font-medium">Markets</span>
-      </button>
-      <button
-        onClick={() => { setSelectedTab('profile'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'profile' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <UserCircle className="w-5 h-5" />
-        <span className="font-medium">Profile</span>
-      </button>
-      <button
-        onClick={() => { setSelectedTab('settings'); setSidebarOpen(false); }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-          selectedTab === 'settings' 
-            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        <Settings className="w-5 h-5" />
-        <span className="font-medium">Settings</span>
-      </button>
+      {[
+        { id: 'overview', icon: PieChart, label: 'Overview' },
+        { id: 'deposit', icon: Upload, label: 'Deposit', highlight: true },
+        { id: 'withdraw', icon: Download, label: 'Withdraw' },
+        { id: 'transactions', icon: History, label: 'Transactions' },
+        { id: 'markets', icon: Activity, label: 'Markets' },
+        { id: 'settings', icon: Settings, label: 'Settings' }
+      ].map(item => (
+        <button
+          key={item.id}
+          onClick={() => { setSelectedTab(item.id); setSidebarOpen(false) }}
+          className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
+            selectedTab === item.id ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 
+            item.highlight ? 'text-green-400 hover:bg-green-500/10' :
+            'text-gray-400 hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          <item.icon className="w-5 h-5" />
+          <span className="font-medium">{item.label}</span>
+        </button>
+      ))}
     </nav>
   )
 
@@ -255,311 +347,1037 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40">
-        <Link href="/" className="flex items-center space-x-2 mb-8">
+        <div className="flex items-center space-x-2 mb-8">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
             <Wallet className="w-6 h-6 text-white" />
           </div>
-          <span className="text-xl font-display font-bold text-white">CryptoVault</span>
-        </Link>
-
-        <NavItems />
-
-        <div className="absolute bottom-6 left-6 right-6">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-          >
-            <LogOut className="w-5 h-5" />
-            <span className="font-medium">Logout</span>
-          </button>
+          <span className="text-xl font-bold text-white">CryptoVault</span>
         </div>
+        <NavItems />
+        <button className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5">
+          <LogOut className="w-5 h-5" />
+          <span>Logout</span>
+        </button>
       </aside>
 
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden fixed inset-0 bg-black/50 z-40"
-            />
-            <motion.aside
-              initial={{ x: -300 }}
-              animate={{ x: 0 }}
-              exit={{ x: -300 }}
-              className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-40" />
+            <motion.aside initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }}
+              className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50">
               <div className="flex items-center justify-between mb-8">
-                <Link href="/" className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
                     <Wallet className="w-6 h-6 text-white" />
                   </div>
-                  <span className="text-xl font-display font-bold text-white">CryptoVault</span>
-                </Link>
-                <button onClick={() => setSidebarOpen(false)} className="text-white">
-                  <X className="w-6 h-6" />
-                </button>
+                  <span className="text-xl font-bold text-white">CryptoVault</span>
+                </div>
+                <button onClick={() => setSidebarOpen(false)}><X className="w-6 h-6 text-white" /></button>
               </div>
-
               <NavItems />
-
-              <div className="absolute bottom-6 left-6 right-6">
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-                >
-                  <LogOut className="w-5 h-5" />
-                  <span className="font-medium">Logout</span>
-                </button>
-              </div>
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className="lg:ml-64 p-4 sm:p-6 lg:p-8">
+      <main className="lg:ml-64 p-4 sm:p-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+        <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl glass-effect hover:bg-white/10"
-            >
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-xl glass-effect">
               <Menu className="w-6 h-6 text-white" />
             </button>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-display font-bold text-white mb-1">
-                Welcome back, {getUserName()}!
-              </h1>
-              <p className="text-sm sm:text-base text-gray-400">Here's what's happening with your investments today</p>
+              <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+              <p className="text-gray-400">
+                Welcome back, {userData ? `${userData.firstName} ${userData.lastName}` : 'User'}!
+              </p>
             </div>
           </div>
+          <div className="flex items-center space-x-4">
+            <button onClick={() => setHideBalance(!hideBalance)} 
+              className="p-2.5 rounded-xl glass-effect hover:bg-white/10">
+              {hideBalance ? <EyeOff className="w-5 h-5 text-white" /> : <Eye className="w-5 h-5 text-white" />}
+            </button>
+            <button onClick={() => setNotificationsOpen(!notificationsOpen)} 
+              className="p-2.5 rounded-xl glass-effect hover:bg-white/10 relative">
+              <Bell className="w-5 h-5 text-white" />
+            </button>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <span className="text-white font-bold">
+                {userData?.firstName?.charAt(0) || 'U'}{userData?.lastName?.charAt(0) || ''}
+              </span>
+            </div>
+          </div>
+        </div>
 
-          <div className="flex items-center space-x-3 sm:space-x-4">
-            <div className="hidden sm:block relative flex-1 sm:flex-none">
-              <input
-                type="search"
-                placeholder="Search..."
-                className="w-full sm:w-64 pl-10 pr-4 py-2.5 rounded-xl glass-effect border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
-              />
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        {/* Content Tabs */}
+        {selectedTab === 'overview' && <OverviewTab userData={userData} hideBalance={hideBalance} />}
+        {selectedTab === 'deposit' && <DepositTab onSubmit={handleDeposit} loading={depositLoading} success={depositSuccess} error={depositError} paymentProofFile={paymentProofFile} paymentProofPreview={paymentProofPreview} onFileUpload={handleFileUpload} />}
+        {selectedTab === 'withdraw' && <WithdrawTab onSubmit={handleWithdrawal} loading={withdrawLoading} success={withdrawSuccess} error={withdrawError} userBalance={userData?.balance || 0} />}
+        {selectedTab === 'transactions' && <TransactionsTab transactions={transactions} />}
+        {selectedTab === 'markets' && <MarketsTab prices={cryptoPrices} />}
+        {selectedTab === 'settings' && <SettingsTab userData={userData} />}
+      </main>
+    </div>
+  )
+
+  function OverviewTab({ userData, hideBalance }: { userData: UserData | null, hideBalance: boolean }) {
+    return (
+      <>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="p-6 rounded-2xl glass-effect hover:bg-white/5">
+            <div className="flex justify-between mb-4">
+              <span className="text-gray-400 text-sm">Total Balance</span>
+              <Eye className="w-5 h-5 text-green-400" />
+            </div>
+            <p className="text-3xl font-bold text-white mb-2">
+              {hideBalance ? '••••••' : `$${userData?.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}`}
+            </p>
+            <p className="text-gray-400 text-sm">
+              {userData && userData.balance === 0 ? 'Make a deposit to get started' : 'Available for trading & withdrawal'}
+            </p>
+          </div>
+          
+          <div className="p-6 rounded-2xl glass-effect hover:bg-white/5">
+            <div className="flex justify-between mb-4">
+              <span className="text-gray-400 text-sm">Total Deposits</span>
+              <ArrowUpRight className="w-5 h-5 text-blue-400" />
+            </div>
+            <p className="text-3xl font-bold text-white mb-2">
+              ${userData?.totalDeposits.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+            </p>
+            <p className="text-gray-400 text-sm">All-time deposit amount</p>
+          </div>
+          
+          <div className="p-6 rounded-2xl glass-effect hover:bg-white/5">
+            <div className="flex justify-between mb-4">
+              <span className="text-gray-400 text-sm">Total Withdrawals</span>
+              <ArrowDownRight className="w-5 h-5 text-red-400" />
+            </div>
+            <p className="text-3xl font-bold text-white mb-2">
+              ${userData?.totalWithdrawals.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+            </p>
+            <p className="text-gray-400 text-sm">All-time withdrawal amount</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-8">
+          <button onClick={() => setSelectedTab('deposit')}
+            className="p-4 rounded-xl glass-effect hover:bg-white/10 group">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center mb-3 mx-auto group-hover:scale-110 transition-transform">
+              <Upload className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-white font-medium">Deposit</span>
+          </button>
+          
+          <button onClick={() => setSelectedTab('withdraw')}
+            className="p-4 rounded-xl glass-effect hover:bg-white/10 group">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center mb-3 mx-auto group-hover:scale-110 transition-transform">
+              <Download className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-white font-medium">Withdraw</span>
+          </button>
+        </div>
+
+        <div className="glass-effect rounded-2xl p-6">
+          <h2 className="text-2xl font-bold text-white mb-6">Getting Started</h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center mb-3">
+                <span className="text-blue-400 font-bold">1</span>
+              </div>
+              <h3 className="text-white font-semibold mb-2">Make a Deposit</h3>
+              <p className="text-gray-400 text-sm">Deposit funds via wire transfer or crypto to start trading</p>
             </div>
             
-            <button className="p-2.5 rounded-xl glass-effect hover:bg-white/10 transition-all relative">
-              <Bell className="w-5 h-5 text-white" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
-
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center cursor-pointer">
-              <span className="text-white font-bold text-sm">{getUserInitials()}</span>
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center mb-3">
+                <span className="text-purple-400 font-bold">2</span>
+              </div>
+              <h3 className="text-white font-semibold mb-2">Wait for Approval</h3>
+              <p className="text-gray-400 text-sm">Admin will approve your deposit within 24-48 hours</p>
+            </div>
+            
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center mb-3">
+                <span className="text-green-400 font-bold">3</span>
+              </div>
+              <h3 className="text-white font-semibold mb-2">Start Trading</h3>
+              <p className="text-gray-400 text-sm">Once approved, funds will be available in your account</p>
             </div>
           </div>
         </div>
+      </>
+    )
+  }
 
-        {/* Portfolio Overview Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
+  function DepositTab({ onSubmit, loading, success, error, paymentProofFile, paymentProofPreview, onFileUpload }: { 
+    onSubmit: (data: DepositRequest) => void; 
+    loading: boolean;
+    success: boolean;
+    error: string;
+    paymentProofFile: File | null;
+    paymentProofPreview: string | null;
+    onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  }) {
+    const [amount, setAmount] = useState('')
+    const [asset, setAsset] = useState('USD')
+    const [paymentMethod, setPaymentMethod] = useState<'wire' | 'crypto'>('wire')
+    const [txHash, setTxHash] = useState('')
+    const fileInputRef = useRef<HTMLInputElement>(null)
+
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault()
+      
+      if (paymentMethod === 'crypto' && !txHash) {
+        alert('Please enter transaction hash for crypto deposits')
+        return
+      }
+      
+      if (paymentMethod === 'wire' && !paymentProofFile) {
+        alert('Please upload payment proof for wire transfers')
+        return
+      }
+      
+      onSubmit({
+        userId,
+        amount: parseFloat(amount),
+        asset,
+        paymentMethod,
+        walletAddress: paymentMethod === 'crypto' ? DEMO_WALLETS[asset as keyof typeof DEMO_WALLETS] : undefined,
+        txHash: paymentMethod === 'crypto' ? txHash : undefined,
+        paymentProof: paymentProofFile || undefined
+      })
+    }
+
+    const removePaymentProof = () => {
+      setPaymentProofFile(null)
+      setPaymentProofPreview(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+
+    return (
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-8">Deposit Funds</h1>
+        
+        {success && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="p-4 sm:p-6 rounded-2xl glass-effect hover:bg-white/5 transition-all"
+            className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl"
           >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <span className="text-gray-400 text-xs sm:text-sm font-medium">Total Balance</span>
-              <button onClick={() => setHideBalance(!hideBalance)} className="text-gray-400 hover:text-white">
-                {hideBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              {hideBalance ? '••••••' : '$198,282.90'}
-            </div>
-            <div className="flex items-center text-green-400 text-xs sm:text-sm">
-              <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              <span>+24.5% ($48,902)</span>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-400" />
+              <div>
+                <p className="text-green-400 font-medium">Deposit request submitted!</p>
+                <p className="text-green-400/80 text-sm">Waiting for admin approval. You'll be notified once approved.</p>
+              </div>
             </div>
           </motion.div>
+        )}
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="p-4 sm:p-6 rounded-2xl glass-effect hover:bg-white/5 transition-all"
+            className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
           >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <span className="text-gray-400 text-xs sm:text-sm font-medium">Total Profit/Loss</span>
-              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              {hideBalance ? '••••••' : '+$48,902'}
-            </div>
-            <div className="flex items-center text-green-400 text-xs sm:text-sm">
-              <ArrowUpRight className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              <span>+24.5% This month</span>
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <p className="text-red-400 font-medium">{error}</p>
             </div>
           </motion.div>
+        )}
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="p-4 sm:p-6 rounded-2xl glass-effect hover:bg-white/5 transition-all"
-          >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <span className="text-gray-400 text-xs sm:text-sm font-medium">Total Invested</span>
-              <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              {hideBalance ? '••••••' : '$149,380'}
-            </div>
-            <div className="flex items-center text-gray-400 text-xs sm:text-sm">
-              <span>Across 4 assets</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="p-4 sm:p-6 rounded-2xl glass-effect hover:bg-white/5 transition-all"
-          >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <span className="text-gray-400 text-xs sm:text-sm font-medium">24h Change</span>
-              <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              {hideBalance ? '••••••' : '+$4,823'}
-            </div>
-            <div className="flex items-center text-green-400 text-xs sm:text-sm">
-              <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              <span>+2.43%</span>
-            </div>
-          </motion.div>
+        <div className="glass-effect rounded-2xl p-6 mb-8">
+          <h2 className="text-xl font-bold text-white mb-6">Select Deposit Method</h2>
+          
+          <div className="grid md:grid-cols-2 gap-4 mb-6">
+            <button
+              onClick={() => setPaymentMethod('wire')}
+              className={`p-6 rounded-xl border-2 transition-all ${paymentMethod === 'wire' ? 'border-green-500 bg-green-500/10' : 'border-white/10 bg-white/5 hover:border-green-500/50'}`}
+            >
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mb-3">
+                <Building className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-white font-bold mb-2">Wire Transfer</h3>
+              <p className="text-gray-400 text-sm">Bank transfer (USD)</p>
+              {paymentMethod === 'wire' && (
+                <div className="mt-3">
+                  <p className="text-green-400 text-sm">✓ Selected</p>
+                </div>
+              )}
+            </button>
+            
+            <button
+              onClick={() => setPaymentMethod('crypto')}
+              className={`p-6 rounded-xl border-2 transition-all ${paymentMethod === 'crypto' ? 'border-green-500 bg-green-500/10' : 'border-white/10 bg-white/5 hover:border-green-500/50'}`}
+            >
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center mb-3">
+                <Globe className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-white font-bold mb-2">Cryptocurrency</h3>
+              <p className="text-gray-400 text-sm">BTC, ETH, USDT</p>
+              {paymentMethod === 'crypto' && (
+                <div className="mt-3">
+                  <p className="text-green-400 text-sm">✓ Selected</p>
+                </div>
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          {quickActions.map((action, index) => (
-            <motion.button
-              key={action.label}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.05 }}
-              className="p-3 sm:p-4 rounded-xl glass-effect hover:bg-white/10 transition-all group"
-            >
-              <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center mb-2 sm:mb-3 group-hover:scale-110 transition-transform mx-auto`}>
-                {action.icon}
+        {paymentMethod === 'crypto' && (
+          <div className="glass-effect rounded-2xl p-6 mb-8">
+            <h2 className="text-xl font-bold text-white mb-4">Deposit Wallet Address</h2>
+            <div className="space-y-3">
+              {Object.entries(DEMO_WALLETS).map(([assetType, address]) => (
+                <div key={assetType} className="p-4 rounded-xl bg-white/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-white font-medium">{assetType}</span>
+                    <button
+                      onClick={() => copyToClipboard(address)}
+                      className="px-3 py-1 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 text-sm flex items-center space-x-1"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+                  <p className="text-gray-400 text-sm font-mono break-all">{address}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-gray-400 text-sm mt-4">
+              Send only {asset} to this address. Sending other assets may result in loss of funds.
+            </p>
+          </div>
+        )}
+
+        {paymentMethod === 'wire' && (
+          <div className="glass-effect rounded-2xl p-6 mb-8">
+            <h2 className="text-xl font-bold text-white mb-4">Wire Transfer Details</h2>
+            <div className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Bank Name</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.bankName}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Account Name</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.accountName}</p>
+                </div>
               </div>
-              <span className="text-white font-medium text-sm sm:text-base">{action.label}</span>
-            </motion.button>
+              
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Account Number</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.accountNumber}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Routing Number</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.routingNumber}</p>
+                </div>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">SWIFT Code</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.swiftCode}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">IBAN</p>
+                  <p className="text-white font-medium">{WIRE_TRANSFER_DETAILS.iban}</p>
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-gray-400 text-sm mb-1">Bank Address</p>
+                <p className="text-white">{WIRE_TRANSFER_DETAILS.address}</p>
+              </div>
+              
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                <div className="flex items-start space-x-2">
+                  <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-yellow-400 font-medium mb-1">Important</p>
+                    <p className="text-yellow-400/80 text-sm">
+                      Use <span className="font-bold">"{WIRE_TRANSFER_DETAILS.reference}"</span> as payment reference
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="glass-effect rounded-2xl p-6">
+          <h2 className="text-xl font-bold text-white mb-6">Deposit Details</h2>
+          
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-6">
+              {paymentMethod === 'crypto' && (
+                <FormField 
+                  label="Select Cryptocurrency" 
+                  type="select" 
+                  value={asset}
+                  onChange={(e) => setAsset(e.target.value)}
+                  options={['BTC', 'ETH', 'USDT']} 
+                  required
+                />
+              )}
+              
+              <FormField 
+                label="Amount" 
+                type="number" 
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                min="50"
+                step="0.01"
+                required
+              />
+              
+              {paymentMethod === 'crypto' && (
+                <FormField 
+                  label="Transaction Hash" 
+                  type="text" 
+                  value={txHash}
+                  onChange={(e) => setTxHash(e.target.value)}
+                  placeholder="Enter blockchain transaction hash"
+                  required
+                />
+              )}
+              
+              {paymentMethod === 'wire' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Payment Proof (Transaction ID/Receipt)*
+                  </label>
+                  <div className="border-2 border-dashed border-white/10 rounded-xl p-6 hover:border-purple-500/50 transition-colors">
+                    {paymentProofFile ? (
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center space-x-3">
+                            <FileText className="w-8 h-8 text-blue-400" />
+                            <div>
+                              <p className="text-white font-medium">{paymentProofFile.name}</p>
+                              <p className="text-gray-400 text-sm">
+                                {(paymentProofFile.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={removePaymentProof}
+                            className="p-2 rounded-lg hover:bg-white/10"
+                          >
+                            <X className="w-4 h-4 text-gray-400" />
+                          </button>
+                        </div>
+                        
+                        {paymentProofPreview && (
+                          <div className="mt-4">
+                            <img 
+                              src={paymentProofPreview} 
+                              alt="Payment proof preview" 
+                              className="max-w-full h-auto max-h-48 rounded-lg mx-auto"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <p className="text-gray-400 mb-2">Click to upload payment proof</p>
+                        <p className="text-gray-500 text-sm mb-4">PNG, JPG, PDF up to 5MB</p>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                        >
+                          Choose File
+                        </button>
+                      </div>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={onFileUpload}
+                      accept="image/*,.pdf"
+                      className="hidden"
+                    />
+                  </div>
+                  <p className="text-gray-500 text-sm mt-2">
+                    Upload screenshot or PDF of bank transfer receipt
+                  </p>
+                </div>
+              )}
+              
+              <button 
+                type="submit"
+                disabled={loading || !amount || (paymentMethod === 'wire' && !paymentProofFile)}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Submit Deposit Request</span>
+                )}
+              </button>
+            </div>
+          </form>
+          
+          <div className="mt-8 p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+            <div className="flex items-start space-x-3">
+              <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
+              <div>
+                <h4 className="text-yellow-400 font-semibold mb-1">Important Instructions</h4>
+                <ul className="text-gray-300 text-sm space-y-1">
+                  <li>• All deposits require admin approval</li>
+                  <li>• Processing time: 24-48 hours</li>
+                  <li>• Minimum deposit: $50</li>
+                  {paymentMethod === 'crypto' && (
+                    <>
+                      <li>• Send only the selected cryptocurrency</li>
+                      <li>• Include transaction hash for verification</li>
+                    </>
+                  )}
+                  {paymentMethod === 'wire' && (
+                    <>
+                      <li>• Include bank transfer receipt/screenshot</li>
+                      <li>• Use reference: {WIRE_TRANSFER_DETAILS.reference}</li>
+                    </>
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function WithdrawTab({ onSubmit, loading, success, error, userBalance }: { 
+    onSubmit: (data: WithdrawalRequest) => void; 
+    loading: boolean;
+    success: boolean;
+    error: string;
+    userBalance: number;
+  }) {
+    const [amount, setAmount] = useState('')
+    const [asset, setAsset] = useState('USD')
+    const [walletAddress, setWalletAddress] = useState('')
+    const [bankDetails, setBankDetails] = useState({
+      accountName: '',
+      accountNumber: '',
+      bankName: '',
+      swiftCode: '',
+      country: ''
+    })
+
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault()
+      
+      if (parseFloat(amount) > userBalance) {
+        alert('Amount exceeds available balance')
+        return
+      }
+      
+      const data: WithdrawalRequest = {
+        userId,
+        amount: parseFloat(amount),
+        asset,
+      }
+      
+      if (asset === 'USD') {
+        // Validate bank details
+        if (!bankDetails.accountName || !bankDetails.accountNumber || !bankDetails.bankName) {
+          alert('Please fill in all required bank details')
+          return
+        }
+        data.bankDetails = bankDetails
+      } else {
+        // Validate wallet address
+        if (!walletAddress) {
+          alert('Please enter wallet address')
+          return
+        }
+        data.walletAddress = walletAddress
+      }
+      
+      onSubmit(data)
+    }
+
+    return (
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-8">Withdraw Funds</h1>
+        
+        <div className="glass-effect rounded-2xl p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm">Available Balance</p>
+              <p className="text-3xl font-bold text-white">${userBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <Wallet className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </div>
+        
+        {success && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl"
+          >
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-400" />
+              <div>
+                <p className="text-green-400 font-medium">Withdrawal request submitted!</p>
+                <p className="text-green-400/80 text-sm">Waiting for admin approval. You'll be notified once approved.</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
+          >
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <p className="text-red-400 font-medium">{error}</p>
+            </div>
+          </motion.div>
+        )}
+
+        <div className="glass-effect rounded-2xl p-6">
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-6">
+              <FormField 
+                label="Select Asset" 
+                type="select" 
+                value={asset}
+                onChange={(e) => {
+                  setAsset(e.target.value)
+                  setWalletAddress('')
+                  setBankDetails({
+                    accountName: '',
+                    accountNumber: '',
+                    bankName: '',
+                    swiftCode: '',
+                    country: ''
+                  })
+                }}
+                options={['USD', 'BTC', 'ETH', 'USDT']} 
+                required
+              />
+              
+              <FormField 
+                label="Amount" 
+                type="number" 
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                min="50"
+                max={userBalance.toString()}
+                step="0.01"
+                required
+              />
+              
+              {asset === 'USD' ? (
+                <div className="space-y-4">
+                  <h3 className="text-white font-semibold">Bank Details</h3>
+                  
+                  <FormField 
+                    label="Account Holder Name*" 
+                    type="text" 
+                    value={bankDetails.accountName}
+                    onChange={(e) => setBankDetails({...bankDetails, accountName: e.target.value})}
+                    placeholder="Enter account holder name"
+                    required
+                  />
+                  
+                  <FormField 
+                    label="Account Number*" 
+                    type="text" 
+                    value={bankDetails.accountNumber}
+                    onChange={(e) => setBankDetails({...bankDetails, accountNumber: e.target.value})}
+                    placeholder="Enter account number"
+                    required
+                  />
+                  
+                  <FormField 
+                    label="Bank Name*" 
+                    type="text" 
+                    value={bankDetails.bankName}
+                    onChange={(e) => setBankDetails({...bankDetails, bankName: e.target.value})}
+                    placeholder="Enter bank name"
+                    required
+                  />
+                  
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <FormField 
+                      label="SWIFT/BIC Code" 
+                      type="text" 
+                      value={bankDetails.swiftCode}
+                      onChange={(e) => setBankDetails({...bankDetails, swiftCode: e.target.value})}
+                      placeholder="Enter SWIFT code"
+                    />
+                    
+                    <FormField 
+                      label="Country" 
+                      type="text" 
+                      value={bankDetails.country}
+                      onChange={(e) => setBankDetails({...bankDetails, country: e.target.value})}
+                      placeholder="Enter country"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <FormField 
+                  label={`${asset} Wallet Address*`} 
+                  type="text" 
+                  value={walletAddress}
+                  onChange={(e) => setWalletAddress(e.target.value)}
+                  placeholder={`Enter your ${asset} wallet address`}
+                  required
+                />
+              )}
+              
+              <button 
+                type="submit"
+                disabled={loading || !amount || (asset === 'USD' ? (!bankDetails.accountName || !bankDetails.accountNumber || !bankDetails.bankName) : !walletAddress)}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Request Withdrawal</span>
+                )}
+              </button>
+            </div>
+          </form>
+          
+          <div className="mt-8 p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+            <div className="flex items-start space-x-3">
+              <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
+              <div>
+                <h4 className="text-yellow-400 font-semibold mb-1">Important Information</h4>
+                <ul className="text-gray-300 text-sm space-y-1">
+                  <li>• All withdrawals require admin approval</li>
+                  <li>• Processing time: 24-48 hours</li>
+                  <li>• Minimum withdrawal: $50</li>
+                  <li>• Network fees may apply for crypto withdrawals</li>
+                  <li>• Ensure wallet/bank details are correct</li>
+                  <li>• Double-check all information before submitting</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function TransactionsTab({ transactions }: { transactions: any[] }) {
+    return (
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-8">Transaction History</h1>
+        
+        {transactions.length === 0 ? (
+          <div className="glass-effect rounded-2xl p-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+              <History className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">No Transactions Yet</h3>
+            <p className="text-gray-400 mb-6">Make your first deposit to see transactions here</p>
+            <button onClick={() => setSelectedTab('deposit')} 
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium">
+              Make a Deposit
+            </button>
+          </div>
+        ) : (
+          <div className="glass-effect rounded-2xl p-6">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-3 text-gray-400">Type</th>
+                    <th className="text-left py-3 text-gray-400">Asset/Method</th>
+                    <th className="text-left py-3 text-gray-400">Amount</th>
+                    <th className="text-left py-3 text-gray-400">Value</th>
+                    <th className="text-left py-3 text-gray-400">Status</th>
+                    <th className="text-left py-3 text-gray-400">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs ${tx.type === 'deposit' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
+                          {tx.type}
+                        </span>
+                      </td>
+                      <td className="py-4">
+                        <div className="text-white">{tx.asset}</div>
+                        {tx.method && <div className="text-gray-400 text-xs">{tx.method}</div>}
+                      </td>
+                      <td className={`py-4 ${tx.amount.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>{tx.amount}</td>
+                      <td className="py-4 text-white">{tx.value}</td>
+                      <td className="py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs ${tx.status === 'Completed' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                          {tx.status}
+                        </span>
+                      </td>
+                      <td className="py-4 text-gray-400">{tx.date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function MarketsTab({ prices }: { prices: CryptoPrices }) {
+    return (
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-8">Crypto Markets</h1>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Object.entries(prices).map(([coin, data]) => (
+            <div key={coin} className="glass-effect rounded-2xl p-6 hover:bg-white/5">
+              <h3 className="text-xl font-bold text-white capitalize mb-2">
+                {coin === 'tether' ? 'USDT' : coin}
+              </h3>
+              <p className="text-3xl font-bold text-white mb-2">
+                ${data.usd?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+              </p>
+              <p className={`text-sm ${data.usd_24h_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {data.usd_24h_change?.toFixed(2)}% 24h
+              </p>
+            </div>
           ))}
         </div>
+      </div>
+    )
+  }
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-          {/* Portfolio Assets */}
-          <div className="lg:col-span-2">
-            <div className="glass-effect rounded-2xl p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-                <h2 className="text-xl sm:text-2xl font-display font-bold text-white">Your Portfolio</h2>
-                <button className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-medium hover:shadow-lg transition-all">
-                  <Plus className="w-4 h-4 inline mr-1" />
-                  Add Asset
-                </button>
-              </div>
-
-              <div className="space-y-3 sm:space-y-4">
-                {portfolioData.map((asset, index) => (
-                  <motion.div
-                    key={asset.symbol}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="p-3 sm:p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between mb-3 sm:mb-0">
-                      <div className="flex items-center space-x-3 sm:space-x-4">
-                        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br ${asset.color}`}></div>
-                        <div>
-                          <div className="font-semibold text-white text-base sm:text-lg">{asset.name}</div>
-                          <div className="text-xs sm:text-sm text-gray-400">{asset.amount} {asset.symbol}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="text-right">
-                        <div className="font-bold text-white text-base sm:text-lg mb-1">{hideBalance ? '••••••' : asset.value}</div>
-                        <div className={`text-xs sm:text-sm font-medium flex items-center justify-end ${asset.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                          {asset.trend === 'up' ? <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> : <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />}
-                          {asset.change}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Mini sparkline */}
-                    <div className="mt-3 sm:mt-4 h-10 sm:h-12 flex items-end space-x-1">
-                      {asset.sparkline.map((value, i) => (
-                        <div
-                          key={i}
-                          className={`flex-1 rounded-t ${asset.trend === 'up' ? 'bg-green-500/50' : 'bg-red-500/50'}`}
-                          style={{ height: `${(value / Math.max(...asset.sparkline)) * 100}%` }}
-                        ></div>
-                      ))}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+  function SettingsTab({ userData }: { userData: UserData | null }) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-8">Settings</h1>
+        
+        <div className="glass-effect rounded-2xl p-6 mb-8">
+          <h2 className="text-xl font-bold text-white mb-6 flex items-center">
+            <User className="w-5 h-5 mr-2" />
+            Profile Information
+          </h2>
+          
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">First Name</label>
+              <input
+                type="text"
+                value={userData?.firstName || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
             </div>
-          </div>
-
-          {/* Recent Transactions */}
-          <div>
-            <div className="glass-effect rounded-2xl p-4 sm:p-6">
-              <h2 className="text-lg sm:text-xl font-display font-bold text-white mb-4 sm:mb-6">Recent Activity</h2>
-              
-              <div className="space-y-3 sm:space-y-4">
-                {recentTransactions.map((tx, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-all"
-                  >
-                    <div className="flex items-center space-x-2 sm:space-x-3">
-                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${
-                        tx.type === 'deposit' ? 'bg-green-500/20 text-green-400' :
-                        tx.type === 'withdraw' ? 'bg-red-500/20 text-red-400' :
-                        'bg-blue-500/20 text-blue-400'
-                      }`}>
-                        {tx.type === 'deposit' ? <ArrowDownRight className="w-4 h-4 sm:w-5 sm:h-5" /> :
-                         tx.type === 'withdraw' ? <ArrowUpRight className="w-4 h-4 sm:w-5 sm:h-5" /> :
-                         <Activity className="w-4 h-4 sm:w-5 sm:h-5" />}
-                      </div>
-                      <div>
-                        <div className="text-white font-medium text-xs sm:text-sm">{tx.asset}</div>
-                        <div className="text-gray-400 text-[10px] sm:text-xs">{tx.date}</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`font-semibold text-xs sm:text-sm ${
-                        tx.amount.startsWith('+') ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {tx.amount}
-                      </div>
-                      <div className="text-gray-400 text-[10px] sm:text-xs">{tx.value}</div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-
-              <button className="w-full mt-4 py-2.5 rounded-xl glass-effect hover:bg-white/10 text-white text-xs sm:text-sm font-medium transition-all">
-                View All Transactions
-              </button>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Last Name</label>
+              <input
+                type="text"
+                value={userData?.lastName || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-400 mb-2">Email Address</label>
+              <input
+                type="email"
+                value={userData?.email || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Phone Number</label>
+              <input
+                type="tel"
+                value={userData?.phone || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Country</label>
+              <input
+                type="text"
+                value={userData?.country || ''}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+                readOnly
+              />
             </div>
           </div>
         </div>
-      </main>
+        
+        <div className="glass-effect rounded-2xl p-6 mb-8">
+          <h2 className="text-xl font-bold text-white mb-6 flex items-center">
+            <Shield className="w-5 h-5 mr-2" />
+            Security
+          </h2>
+          
+          <div className="space-y-4">
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Two-Factor Authentication</p>
+                  <p className="text-gray-400 text-sm">Add an extra layer of security</p>
+                </div>
+                <span className="text-gray-400">Disabled</span>
+              </div>
+            </button>
+            
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Change Password</p>
+                  <p className="text-gray-400 text-sm">Update your password regularly</p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+            
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Login History</p>
+                  <p className="text-gray-400 text-sm">View recent login activity</p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+          </div>
+        </div>
+        
+        <div className="glass-effect rounded-2xl p-6">
+          <h2 className="text-xl font-bold text-white mb-6 flex items-center">
+            <HelpCircle className="w-5 h-5 mr-2" />
+            Support
+          </h2>
+          
+          <div className="space-y-4">
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Contact Support</p>
+                  <p className="text-gray-400 text-sm">Get help from our support team</p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+            
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">FAQ</p>
+                  <p className="text-gray-400 text-sm">Frequently asked questions</p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+            
+            <button className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 text-left transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Documentation</p>
+                  <p className="text-gray-400 text-sm">User guides and tutorials</p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+}
+
+function FormField({ 
+  label, 
+  type, 
+  value,
+  onChange,
+  placeholder, 
+  options,
+  required = false,
+  min,
+  max,
+  step
+}: { 
+  label: string; 
+  type: string; 
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+  placeholder?: string; 
+  options?: string[];
+  required?: boolean;
+  min?: string;
+  max?: string;
+  step?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-400 mb-2">
+        {label}
+        {required && <span className="text-red-400 ml-1">*</span>}
+      </label>
+      {type === 'select' && options ? (
+        <select 
+          value={value}
+          onChange={onChange}
+          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+          required={required}
+        >
+          <option value="">Select an option</option>
+          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      ) : (
+        <input 
+          type={type} 
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          min={min}
+          max={max}
+          step={step}
+          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+          required={required}
+        />
+      )}
     </div>
   )
 }
