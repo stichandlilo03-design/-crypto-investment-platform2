@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight, DollarSign,
   PieChart, Activity, Settings, LogOut, Bell, Search, Plus, Download, Upload,
-  Eye, EyeOff, History, UserCircle, Menu, X, Check, Clock, AlertCircle, FileText
+  Eye, EyeOff, History, UserCircle, Menu, X, Check, Clock, AlertCircle, FileText,
+  CheckCircle, Loader2, ExternalLink
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -30,6 +31,22 @@ interface PortfolioAsset {
   trend: 'up' | 'down';
 }
 
+// Types for deposits and withdrawals
+interface DepositRequest {
+  userId: string;
+  amount: number;
+  asset: string;
+  paymentProof?: string;
+  txHash?: string;
+}
+
+interface WithdrawalRequest {
+  userId: string;
+  amount: number;
+  asset: string;
+  walletAddress: string;
+}
+
 export default function DashboardPage() {
   const [hideBalance, setHideBalance] = useState(false)
   const [selectedTab, setSelectedTab] = useState('overview')
@@ -37,6 +54,15 @@ export default function DashboardPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [cryptoPrices, setCryptoPrices] = useState<CryptoPrices>({})
   const [loading, setLoading] = useState(true)
+  const [depositLoading, setDepositLoading] = useState(false)
+  const [withdrawLoading, setWithdrawLoading] = useState(false)
+  const [depositSuccess, setDepositSuccess] = useState(false)
+  const [withdrawSuccess, setWithdrawSuccess] = useState(false)
+  const [depositError, setDepositError] = useState('')
+  const [withdrawError, setWithdrawError] = useState('')
+
+  // Mock user ID - in real app, get from auth
+  const userId = 'user-123'
 
   // Fetch real crypto prices
   useEffect(() => {
@@ -101,6 +127,76 @@ export default function DashboardPage() {
       trend: change >= 0 ? 'up' as const : 'down' as const 
     }
   })
+
+  // Handle deposit submission
+  const handleDeposit = async (data: DepositRequest) => {
+    setDepositLoading(true)
+    setDepositError('')
+    setDepositSuccess(false)
+    
+    try {
+      const response = await fetch('/api/deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      })
+      
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Deposit failed')
+      }
+      
+      setDepositSuccess(true)
+      // Reset form after success
+      setTimeout(() => {
+        setDepositSuccess(false)
+        setSelectedTab('overview')
+      }, 3000)
+      
+    } catch (error) {
+      setDepositError(error instanceof Error ? error.message : 'Deposit failed')
+    } finally {
+      setDepositLoading(false)
+    }
+  }
+
+  // Handle withdrawal submission
+  const handleWithdrawal = async (data: WithdrawalRequest) => {
+    setWithdrawLoading(true)
+    setWithdrawError('')
+    setWithdrawSuccess(false)
+    
+    try {
+      const response = await fetch('/api/withdraw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      })
+      
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Withdrawal failed')
+      }
+      
+      setWithdrawSuccess(true)
+      // Reset form after success
+      setTimeout(() => {
+        setWithdrawSuccess(false)
+        setSelectedTab('overview')
+      }, 3000)
+      
+    } catch (error) {
+      setWithdrawError(error instanceof Error ? error.message : 'Withdrawal failed')
+    } finally {
+      setWithdrawLoading(false)
+    }
+  }
 
   const NavItems = () => (
     <nav className="space-y-2">
@@ -227,8 +323,8 @@ export default function DashboardPage() {
 
         {/* Content Tabs */}
         {selectedTab === 'overview' && <OverviewTab />}
-        {selectedTab === 'deposit' && <DepositTab />}
-        {selectedTab === 'withdraw' && <WithdrawTab />}
+        {selectedTab === 'deposit' && <DepositTab onSubmit={handleDeposit} loading={depositLoading} success={depositSuccess} error={depositError} />}
+        {selectedTab === 'withdraw' && <WithdrawTab onSubmit={handleWithdrawal} loading={withdrawLoading} success={withdrawSuccess} error={withdrawError} />}
         {selectedTab === 'transactions' && <TransactionsTab />}
         {selectedTab === 'markets' && <MarketsTab prices={cryptoPrices} />}
         {selectedTab === 'portfolio' && <PortfolioTab data={portfolioData} hide={hideBalance} />}
@@ -305,16 +401,115 @@ export default function DashboardPage() {
     )
   }
 
-  function DepositTab() {
+  function DepositTab({ onSubmit, loading, success, error }: { 
+    onSubmit: (data: DepositRequest) => void; 
+    loading: boolean;
+    success: boolean;
+    error: string;
+  }) {
+    const [amount, setAmount] = useState('')
+    const [asset, setAsset] = useState('BTC')
+    const [paymentProof, setPaymentProof] = useState('')
+    const [txHash, setTxHash] = useState('')
+
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault()
+      onSubmit({
+        userId,
+        amount: parseFloat(amount),
+        asset,
+        paymentProof: paymentProof || undefined,
+        txHash: txHash || undefined
+      })
+    }
+
     return (
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-8">Deposit Funds</h1>
+        
+        {success && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl"
+          >
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-400" />
+              <div>
+                <p className="text-green-400 font-medium">Deposit request submitted!</p>
+                <p className="text-green-400/80 text-sm">Waiting for admin approval. You'll be notified once approved.</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
+          >
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <p className="text-red-400 font-medium">{error}</p>
+            </div>
+          </motion.div>
+        )}
+
         <div className="glass-effect rounded-2xl p-6">
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            <DepositMethod icon="₿" title="Bitcoin (BTC)" desc="Send BTC to wallet" color="from-orange-500 to-yellow-500" />
-            <DepositMethod icon="$" title="Wire Transfer" desc="Bank transfer (USD, EUR)" color="from-blue-500 to-cyan-500" />
-          </div>
-          <div className="p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-6">
+              <FormField 
+                label="Select Asset" 
+                type="select" 
+                value={asset}
+                onChange={(e) => setAsset(e.target.value)}
+                options={['BTC', 'ETH', 'USDT', 'USD']} 
+              />
+              
+              <FormField 
+                label="Amount" 
+                type="number" 
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                required
+              />
+              
+              <FormField 
+                label="Transaction Hash (Optional)" 
+                type="text" 
+                value={txHash}
+                onChange={(e) => setTxHash(e.target.value)}
+                placeholder="Enter blockchain transaction hash"
+              />
+              
+              <FormField 
+                label="Payment Proof URL (Optional)" 
+                type="text" 
+                value={paymentProof}
+                onChange={(e) => setPaymentProof(e.target.value)}
+                placeholder="Link to payment proof screenshot"
+              />
+              
+              <button 
+                type="submit"
+                disabled={loading || !amount}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Submit Deposit Request</span>
+                )}
+              </button>
+            </div>
+          </form>
+          
+          <div className="mt-8 p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
             <div className="flex items-start space-x-3">
               <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
               <div>
@@ -328,19 +523,104 @@ export default function DashboardPage() {
     )
   }
 
-  function WithdrawTab() {
+  function WithdrawTab({ onSubmit, loading, success, error }: { 
+    onSubmit: (data: WithdrawalRequest) => void; 
+    loading: boolean;
+    success: boolean;
+    error: string;
+  }) {
+    const [amount, setAmount] = useState('')
+    const [asset, setAsset] = useState('BTC')
+    const [walletAddress, setWalletAddress] = useState('')
+
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault()
+      onSubmit({
+        userId,
+        amount: parseFloat(amount),
+        asset,
+        walletAddress
+      })
+    }
+
     return (
       <div className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-8">Withdraw Funds</h1>
+        
+        {success && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl"
+          >
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-400" />
+              <div>
+                <p className="text-green-400 font-medium">Withdrawal request submitted!</p>
+                <p className="text-green-400/80 text-sm">Waiting for admin approval. You'll be notified once approved.</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
+          >
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <p className="text-red-400 font-medium">{error}</p>
+            </div>
+          </motion.div>
+        )}
+
         <div className="glass-effect rounded-2xl p-6">
-          <div className="space-y-4">
-            <FormField label="Select Asset" type="select" options={['Bitcoin (BTC)', 'Ethereum (ETH)', 'Wire Transfer (USD)']} />
-            <FormField label="Amount" type="number" placeholder="0.00" />
-            <FormField label="Wallet Address / Account" type="text" placeholder="Enter destination" />
-            <button className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-medium">
-              Request Withdrawal
-            </button>
-          </div>
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-6">
+              <FormField 
+                label="Select Asset" 
+                type="select" 
+                value={asset}
+                onChange={(e) => setAsset(e.target.value)}
+                options={['BTC', 'ETH', 'USDT', 'USD']} 
+              />
+              
+              <FormField 
+                label="Amount" 
+                type="number" 
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                required
+              />
+              
+              <FormField 
+                label="Wallet Address" 
+                type="text" 
+                value={walletAddress}
+                onChange={(e) => setWalletAddress(e.target.value)}
+                placeholder="Enter your wallet address"
+                required
+              />
+              
+              <button 
+                type="submit"
+                disabled={loading || !amount || !walletAddress}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Request Withdrawal</span>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     )
@@ -461,42 +741,48 @@ function StatCard({ title, value, change, subtitle, icon, color = 'green' }: {
   )
 }
 
-function DepositMethod({ icon, title, desc, color }: { 
-  icon: string; 
-  title: string; 
-  desc: string; 
-  color: string 
-}) {
-  return (
-    <div className="p-6 bg-white/5 rounded-xl hover:bg-white/10 cursor-pointer border-2 border-transparent hover:border-purple-500">
-      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center mb-4 text-2xl`}>
-        {icon}
-      </div>
-      <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
-      <p className="text-gray-400 text-sm mb-4">{desc}</p>
-      <button className={`w-full py-2 rounded-lg bg-gradient-to-r ${color} text-white font-medium`}>
-        Deposit
-      </button>
-    </div>
-  )
-}
-
-function FormField({ label, type, placeholder, options }: { 
+function FormField({ 
+  label, 
+  type, 
+  value,
+  onChange,
+  placeholder, 
+  options,
+  required = false 
+}: { 
   label: string; 
   type: string; 
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   placeholder?: string; 
-  options?: string[] 
+  options?: string[];
+  required?: boolean;
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-400 mb-2">{label}</label>
+      <label className="block text-sm font-medium text-gray-400 mb-2">
+        {label}
+        {required && <span className="text-red-400 ml-1">*</span>}
+      </label>
       {type === 'select' && options ? (
-        <select className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white">
-          {options.map(opt => <option key={opt}>{opt}</option>)}
+        <select 
+          value={value}
+          onChange={onChange}
+          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+          required={required}
+        >
+          <option value="">Select an option</option>
+          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
         </select>
       ) : (
-        <input type={type} placeholder={placeholder} 
-          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500" />
+        <input 
+          type={type} 
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+          required={required}
+        />
       )}
     </div>
   )
