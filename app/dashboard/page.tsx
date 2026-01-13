@@ -19,16 +19,68 @@ import {
   Upload,
   Eye,
   EyeOff,
-  CreditCard,
   History,
   UserCircle
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { useRouter } from 'next/navigation'
 
 export default function DashboardPage() {
+  const { user, profile, loading, signOut } = useAuth()
+  const router = useRouter()
   const [hideBalance, setHideBalance] = useState(false)
   const [selectedTab, setSelectedTab] = useState('overview')
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login')
+    }
+  }, [user, loading, router])
+
+  // Handle logout
+  const handleLogout = async () => {
+    await signOut()
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    )
+  }
+
+  // Don't render if no user
+  if (!user) {
+    return null
+  }
+
+  // Get user's name from profile or email
+  const getUserName = () => {
+    if (profile?.full_name) {
+      return profile.full_name.split(' ')[0] // First name only
+    }
+    if (user?.email) {
+      return user.email.split('@')[0] // Username from email
+    }
+    return 'User'
+  }
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (profile?.full_name) {
+      const names = profile.full_name.split(' ')
+      return names.map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    }
+    if (user?.email) {
+      return user.email.slice(0, 2).toUpperCase()
+    }
+    return 'U'
+  }
 
   const portfolioData = [
     { 
@@ -204,13 +256,13 @@ export default function DashboardPage() {
         </nav>
 
         <div className="absolute bottom-6 left-6 right-6">
-          <Link
-            href="/"
+          <button
+            onClick={handleLogout}
             className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
           >
             <LogOut className="w-5 h-5" />
             <span className="font-medium">Logout</span>
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -219,7 +271,9 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white mb-2">Welcome back, John!</h1>
+            <h1 className="text-3xl font-display font-bold text-white mb-2">
+              Welcome back, {getUserName()}!
+            </h1>
             <p className="text-gray-400">Here's what's happening with your investments today</p>
           </div>
 
@@ -239,7 +293,7 @@ export default function DashboardPage() {
             </button>
 
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center cursor-pointer">
-              <span className="text-white font-bold">JD</span>
+              <span className="text-white font-bold text-sm">{getUserInitials()}</span>
             </div>
           </div>
         </div>
