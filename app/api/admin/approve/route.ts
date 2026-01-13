@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import type { Database } from '@/lib/database.types'
+
+type TableName = keyof Database['public']['Tables']
+type Deposit = Database['public']['Tables']['deposits']['Row']
+type Withdrawal = Database['public']['Tables']['withdrawals']['Row']
+type User = Database['public']['Tables']['users']['Row']
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,93 +33,147 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const table = type === 'deposit' ? 'deposits' : 'withdrawals'
     const status = action === 'approve' ? 'approved' : 'rejected'
 
-    // Update the record
-    const { data: record, error: updateError } = await supabaseAdmin
-      .from(table)
-      .update({
-        status,
-        admin_notes: adminNotes || null,
-        approved_by: adminId,
-        approved_at: new Date().toISOString()
+    if (type === 'deposit') {
+      // Update deposit record
+      const { data: deposit, error: depositError } = await supabaseAdmin
+        .from('deposits')
+        .update({
+          status,
+          admin_notes: adminNotes || null,
+          approved_by: adminId,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select('*')
+        .single()
+
+      if (depositError || !deposit) {
+        console.error('Deposit approval error:', depositError)
+        return NextResponse.json(
+          { error: 'Failed to update deposit' },
+          { status: 500 }
+        )
+      }
+
+      // Get user data
+      const { data: user } = await supabaseAdmin
+        .from('users')
+        .select('*')
+        .eq('id', deposit.user_id)
+        .single()
+
+      // If approving a deposit, update user balance
+      if (action === 'approve' && user) {
+        await supabaseAdmin
+          .from('users')
+          .update({
+            balance: (user.balance || 0) + deposit.amount,
+            total_deposits: (user.total_deposits || 0) + deposit.amount,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', deposit.user_id)
+
+        // Update transaction status
+        await supabaseAdmin
+          .from('transactions')
+          .update({ status: 'completed' })
+          .eq('user_id', deposit.user_id)
+          .eq('type', 'deposit')
+          .eq('amount', deposit.amount)
+          .eq('asset', deposit.asset)
+          .order('created_at', { ascending: false })
+          .limit(1)
+      }
+
+      // If rejecting, update transaction status
+      if (action === 'reject') {
+        await supabaseAdmin
+          .from('transactions')
+          .update({ status: 'failed' })
+          .eq('user_id', deposit.user_id)
+          .eq('type', 'deposit')
+          .eq('amount', deposit.amount)
+          .eq('asset', deposit.asset)
+          .order('created_at', { ascending: false })
+          .limit(1)
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Deposit ${action}d successfully`
       })
-      .eq('id', id)
-      .select('*, users(email, full_name, balance)')
-      .single()
-
-    if (updateError || !record) {
-      console.error('Approval update error:', updateError)
-      return NextResponse.json(
-        { error: 'Failed to update record' },
-        { status: 500 }
-      )
-    }
-
-    // If approving a deposit, update user balance
-    if (type === 'deposit' && action === 'approve') {
-      await supabaseAdmin
-        .from('users')
+    } else {
+      // Update withdrawal record
+      const { data: withdrawal, error: withdrawalError } = await supabaseAdmin
+        .from('withdrawals')
         .update({
-          balance: record.users.balance + record.amount,
-          total_deposits: record.users.total_deposits + record.amount,
-          updated_at: new Date().toISOString()
+          status: action === 'approve' ? 'processing' : 'rejected',
+          admin_notes: adminNotes || null,
+          approved_by: adminId,
+          approved_at: new Date().toISOString()
         })
-        .eq('id', record.user_id)
+        .eq('id', id)
+        .select('*')
+        .single()
 
-      // Update transaction status
-      await supabaseAdmin
-        .from('transactions')
-        .update({ status: 'completed' })
-        .eq('user_id', record.user_id)
-        .eq('type', 'deposit')
-        .eq('amount', record.amount)
-        .eq('asset', record.asset)
-        .order('created_at', { ascending: false })
-        .limit(1)
-    }
+      if (withdrawalError || !withdrawal) {
+        console.error('Withdrawal approval error:', withdrawalError)
+        return NextResponse.json(
+          { error: 'Failed to update withdrawal' },
+          { status: 500 }
+        )
+      }
 
-    // If approving a withdrawal, mark as processing
-    if (type === 'withdrawal' && action === 'approve') {
-      await supabaseAdmin
+      // Get user data
+      const { data: user } = await supabaseAdmin
         .from('users')
-        .update({
-          balance: record.users.balance - record.amount,
-          total_withdrawals: record.users.total_withdrawals + record.amount,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', record.user_id)
+        .select('*')
+        .eq('id', withdrawal.user_id)
+        .single()
 
-      // Update transaction status
-      await supabaseAdmin
-        .from('transactions')
-        .update({ status: 'processing' })
-        .eq('user_id', record.user_id)
-        .eq('type', 'withdrawal')
-        .eq('amount', -record.amount)
-        .eq('asset', record.asset)
-        .order('created_at', { ascending: false })
-        .limit(1)
+      // If approving a withdrawal, update user balance and mark as processing
+      if (action === 'approve' && user) {
+        await supabaseAdmin
+          .from('users')
+          .update({
+            balance: (user.balance || 0) - withdrawal.amount,
+            total_withdrawals: (user.total_withdrawals || 0) + withdrawal.amount,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', withdrawal.user_id)
+
+        // Update transaction status
+        await supabaseAdmin
+          .from('transactions')
+          .update({ status: 'processing' })
+          .eq('user_id', withdrawal.user_id)
+          .eq('type', 'withdrawal')
+          .eq('amount', -withdrawal.amount)
+          .eq('asset', withdrawal.asset)
+          .order('created_at', { ascending: false })
+          .limit(1)
+      }
+
+      // If rejecting, update transaction status
+      if (action === 'reject') {
+        await supabaseAdmin
+          .from('transactions')
+          .update({ status: 'failed' })
+          .eq('user_id', withdrawal.user_id)
+          .eq('type', 'withdrawal')
+          .eq('amount', -withdrawal.amount)
+          .eq('asset', withdrawal.asset)
+          .order('created_at', { ascending: false })
+          .limit(1)
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Withdrawal ${action}d successfully`
+      })
     }
-
-    // If rejecting, update transaction status
-    if (action === 'reject') {
-      await supabaseAdmin
-        .from('transactions')
-        .update({ status: 'failed' })
-        .eq('user_id', record.user_id)
-        .eq('type', type as any)
-        .eq(type === 'deposit' ? 'amount' : 'amount', type === 'deposit' ? record.amount : -record.amount)
-        .eq('asset', record.asset)
-        .order('created_at', { ascending: false })
-        .limit(1)
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `${type} ${action}d successfully`
-    })
   } catch (error) {
     console.error('Approval API error:', error)
     return NextResponse.json(
