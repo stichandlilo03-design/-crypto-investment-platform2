@@ -9,8 +9,8 @@ import {
   Mail, Phone, MapPin, User, Shield, HelpCircle
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/hooks/useAuth'
 
 // Define types based on your Supabase schema
 interface UserProfile {
@@ -89,50 +89,33 @@ export default function DashboardPage() {
   const [withdrawSuccess, setWithdrawSuccess] = useState(false)
   const [depositError, setDepositError] = useState('')
   const [withdrawError, setWithdrawError] = useState('')
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [userPortfolio, setUserPortfolio] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
   const [paymentProofPreview, setPaymentProofPreview] = useState<string | null>(null)
   
-  const supabase = createClientComponentClient()
+  const { user, profile, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
 
-  // Fetch user data from Supabase
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login')
+    }
+  }, [authLoading, user, router])
+
+  // Fetch additional user data from Supabase
   useEffect(() => {
     const fetchUserData = async () => {
+      if (!user) return
+
       try {
-        // Get current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-        
-        if (sessionError || !session) {
-          console.error('No session found:', sessionError)
-          router.push('/login')
-          return
-        }
-
-        const userId = session.user.id
-        
-        // Fetch user profile from Supabase
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single()
-        
-        if (profileError) {
-          console.error('Error fetching user profile:', profileError)
-          return
-        }
-        
-        setUserProfile(profileData)
-
         // Fetch user portfolio
         const { data: portfolioData, error: portfolioError } = await supabase
           .from('user_portfolio')
           .select('*')
-          .eq('user_id', userId)
+          .eq('user_id', user.id)
         
         if (!portfolioError && portfolioData) {
           setUserPortfolio(portfolioData)
@@ -142,7 +125,7 @@ export default function DashboardPage() {
         const { data: transactionsData, error: transactionsError } = await supabase
           .from('transactions')
           .select('*')
-          .eq('user_id', userId)
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false })
         
         if (!transactionsError && transactionsData) {
@@ -153,7 +136,7 @@ export default function DashboardPage() {
         const { data: notificationsData, error: notificationsError } = await supabase
           .from('notifications')
           .select('*')
-          .eq('user_id', userId)
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(10)
         
@@ -169,7 +152,7 @@ export default function DashboardPage() {
     }
 
     fetchUserData()
-  }, [supabase, router])
+  }, [user])
 
   // Fetch real crypto prices
   useEffect(() => {
@@ -214,16 +197,6 @@ export default function DashboardPage() {
       tx.type === 'withdraw' && tx.status === 'approved'
     )
     return withdrawalTransactions.reduce((total, tx) => total + Number(tx.amount), 0)
-  }
-
-  // Handle logout
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut()
-      router.push('/login')
-    } catch (error) {
-      console.error('Error logging out:', error)
-    }
   }
 
   // Handle file upload for payment proof
@@ -466,7 +439,7 @@ export default function DashboardPage() {
     </nav>
   )
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-white animate-spin" />
@@ -474,10 +447,14 @@ export default function DashboardPage() {
     )
   }
 
+  if (!user) {
+    return null // Will redirect via useEffect
+  }
+
   // Extract first name from full_name
   const getFirstName = () => {
-    if (!userProfile?.full_name) return 'User'
-    return userProfile.full_name.split(' ')[0]
+    if (!profile?.full_name) return 'User'
+    return profile.full_name.split(' ')[0]
   }
 
   return (
@@ -492,7 +469,7 @@ export default function DashboardPage() {
         </div>
         <NavItems />
         <button 
-          onClick={handleLogout}
+          onClick={signOut}
           className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white"
         >
           <LogOut className="w-5 h-5" />
@@ -519,7 +496,7 @@ export default function DashboardPage() {
               </div>
               <NavItems />
               <button 
-                onClick={handleLogout}
+                onClick={signOut}
                 className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white"
               >
                 <LogOut className="w-5 h-5" />
@@ -559,7 +536,7 @@ export default function DashboardPage() {
             </button>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold">
-                {userProfile?.full_name?.charAt(0) || 'U'}
+                {profile?.full_name?.charAt(0) || 'U'}
               </span>
             </div>
           </div>
@@ -601,7 +578,7 @@ export default function DashboardPage() {
 
         {/* Content Tabs */}
         {selectedTab === 'overview' && <OverviewTab 
-          userProfile={userProfile} 
+          profile={profile} 
           hideBalance={hideBalance} 
           totalBalance={calculateTotalBalance()}
           totalDeposits={calculateTotalDeposits()}
@@ -617,7 +594,7 @@ export default function DashboardPage() {
           paymentProofFile={paymentProofFile} 
           paymentProofPreview={paymentProofPreview} 
           onFileUpload={handleFileUpload} 
-          userId={userProfile?.id || ''}
+          userId={user?.id || ''}
         />}
         {selectedTab === 'withdraw' && <WithdrawTab 
           onSubmit={handleWithdrawal} 
@@ -625,17 +602,17 @@ export default function DashboardPage() {
           success={withdrawSuccess} 
           error={withdrawError} 
           userBalance={calculateTotalBalance()}
-          userId={userProfile?.id || ''}
+          userId={user?.id || ''}
         />}
         {selectedTab === 'transactions' && <TransactionsTab transactions={transactions} />}
         {selectedTab === 'markets' && <MarketsTab prices={cryptoPrices} />}
-        {selectedTab === 'settings' && <SettingsTab userProfile={userProfile} />}
+        {selectedTab === 'settings' && <SettingsTab profile={profile} />}
       </main>
     </div>
   )
 
   function OverviewTab({ 
-    userProfile, 
+    profile, 
     hideBalance, 
     totalBalance,
     totalDeposits,
@@ -643,7 +620,7 @@ export default function DashboardPage() {
     portfolio,
     cryptoPrices 
   }: { 
-    userProfile: UserProfile | null;
+    profile: any;
     hideBalance: boolean;
     totalBalance: number;
     totalDeposits: number;
@@ -1474,7 +1451,7 @@ export default function DashboardPage() {
     )
   }
 
-  function SettingsTab({ userProfile }: { userProfile: UserProfile | null }) {
+  function SettingsTab({ profile }: { profile: any }) {
     return (
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-8">Settings</h1>
@@ -1490,7 +1467,7 @@ export default function DashboardPage() {
               <label className="block text-sm font-medium text-gray-400 mb-2">Full Name</label>
               <input
                 type="text"
-                value={userProfile?.full_name || ''}
+                value={profile?.full_name || ''}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
                 readOnly
               />
@@ -1500,7 +1477,7 @@ export default function DashboardPage() {
               <label className="block text-sm font-medium text-gray-400 mb-2">Email Address</label>
               <input
                 type="email"
-                value={userProfile?.email || ''}
+                value={profile?.email || ''}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
                 readOnly
               />
@@ -1510,7 +1487,7 @@ export default function DashboardPage() {
               <label className="block text-sm font-medium text-gray-400 mb-2">Role</label>
               <input
                 type="text"
-                value={userProfile?.role || ''}
+                value={profile?.role || ''}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
                 readOnly
               />
@@ -1518,8 +1495,8 @@ export default function DashboardPage() {
             
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">KYC Status</label>
-              <div className={`px-4 py-3 rounded-xl ${userProfile?.kyc_verified ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                {userProfile?.kyc_verified ? 'Verified ✓' : 'Pending Verification'}
+              <div className={`px-4 py-3 rounded-xl ${profile?.kyc_verified ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                {profile?.kyc_verified ? 'Verified ✓' : 'Pending Verification'}
               </div>
             </div>
             
@@ -1527,7 +1504,7 @@ export default function DashboardPage() {
               <label className="block text-sm font-medium text-gray-400 mb-2">Member Since</label>
               <input
                 type="text"
-                value={userProfile?.created_at ? new Date(userProfile.created_at).toLocaleDateString() : ''}
+                value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : ''}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
                 readOnly
               />
