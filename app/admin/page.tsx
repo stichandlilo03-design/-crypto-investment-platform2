@@ -15,7 +15,7 @@ export default function AdminPage() {
         // Not logged in, redirect to admin login
         router.push('/admin/login')
       } else if (profile?.role !== 'admin') {
-        // Not an admin, redirect to dashboard
+        // Not an admin, redirect to regular dashboard
         router.push('/dashboard')
       }
     }
