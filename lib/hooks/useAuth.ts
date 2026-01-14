@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
@@ -8,13 +8,19 @@ export function useAuth() {
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const supabase = createSupabaseClient()
+  
+  // ✅ FIXED: Create Supabase client only once using useMemo
+  const supabase = useMemo(() => createSupabaseClient(), [])
 
   useEffect(() => {
+    let isMounted = true
+    
     // Get initial session
     const getInitialSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
+        if (!isMounted) return
+        
         setUser(session?.user ?? null)
         if (session?.user) {
           await fetchProfile(session.user.id)
@@ -28,6 +34,8 @@ export function useAuth() {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!isMounted) return
+      
       console.log('Auth state changed:', _event, session?.user?.email)
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -37,8 +45,11 @@ export function useAuth() {
       }
     })
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
+  }, [supabase])
 
   async function fetchProfile(userId: string) {
     try {
