@@ -1,115 +1,147 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
+import { NextResponse, NextRequest } from 'next/server'
+
+async function isAdmin(supabase: any, userId: string) {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single()
+  
+  return profile?.role === 'admin'
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
-    
-    // Check if user is authenticated and is admin
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     const { data: { session } } = await supabase.auth.getSession()
-
+    
     if (!session) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
-
-    if (profile?.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Admin privileges required' },
-        { status: 403 }
-      )
+    if (!(await isAdmin(supabase, session.user.id))) {
+      return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 })
     }
 
-    const { type, id, action, adminNotes } = await request.json()
+    const body = await request.json()
+    const { id, action, adminNotes } = body
 
-    if (!type || !id || !action) {
+    if (!id || !action) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Transaction ID and action are required' },
         { status: 400 }
       )
     }
 
-    const table = type === 'deposit' ? 'deposits' : 'withdrawals'
+    // Get transaction to determine its type
+    const { data: transaction } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (!transaction) {
+      return NextResponse.json(
+        { error: 'Transaction not found' },
+        { status: 404 }
+      )
+    }
+
     const status = action === 'approve' 
-      ? (type === 'deposit' ? 'approved' : 'processing') 
+      ? 'approved' 
       : 'rejected'
 
-    // Update the transaction
-    const { data: transaction, error: updateError } = await supabase
-      .from(table)
-      .update({
-        status,
-        admin_notes: adminNotes,
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: session.user.id
-      })
+    // Update transaction
+    const updateData: any = {
+      status,
+      admin_notes: adminNotes || null,
+      approved_by: session.user.id,
+      approved_at: new Date().toISOString()
+    }
+
+    const { data: updatedTransaction, error } = await supabase
+      .from('transactions')
+      .update(updateData)
       .eq('id', id)
       .select(`
         *,
-        users (
+        profiles:user_id (
           email,
           full_name
         )
       `)
       .single()
 
-    if (updateError) {
-      console.error('Update error:', updateError)
-      return NextResponse.json(
-        { error: 'Failed to update transaction' },
-        { status: 500 }
-      )
+    if (error) {
+      console.error('Update error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // If approving a deposit, update user balance
-    if (type === 'deposit' && action === 'approve') {
-      const { error: balanceError } = await supabase.rpc('update_user_balance', {
-        user_id: transaction.user_id,
-        amount: transaction.amount,
-        asset: transaction.asset
-      })
-
-      if (balanceError) {
-        console.error('Balance update error:', balanceError)
-        // Continue anyway, but log the error
-      }
+    // Create notification for user
+    let notificationMessage = ''
+    let notificationTitle = ''
+    
+    if (action === 'approve') {
+      notificationTitle = 'Transaction Approved!'
+      notificationMessage = `Your ${transaction.type} of ${transaction.amount} ${transaction.asset} has been approved.`
+    } else {
+      notificationTitle = 'Transaction Rejected'
+      notificationMessage = `Your ${transaction.type} of ${transaction.amount} ${transaction.asset} has been rejected.`
+    }
+    
+    if (adminNotes) {
+      notificationMessage += ` ${adminNotes}`
     }
 
-    // Send notification to user
     await supabase.from('notifications').insert({
       user_id: transaction.user_id,
-      title: `Transaction ${action === 'approve' ? 'Approved' : 'Rejected'}`,
-      message: `Your ${type} of $${transaction.amount} ${transaction.asset} has been ${action === 'approve' ? 'approved' : 'rejected'}.`,
       type: 'transaction',
+      title: notificationTitle,
+      message: notificationMessage,
       metadata: {
         transaction_id: id,
-        transaction_type: type,
+        transaction_type: transaction.type,
         amount: transaction.amount,
         asset: transaction.asset,
         action
       }
     })
 
+    // If approving a deposit, update portfolio
+    if (action === 'approve' && transaction.type === 'deposit') {
+      // Use the PostgreSQL function to process deposit
+      const { data: result, error: depositError } = await supabase.rpc(
+        'process_deposit_approval',
+        {
+          p_transaction_id: id,
+          p_admin_id: session.user.id
+        }
+      )
+
+      if (depositError) {
+        console.error('Deposit approval error:', depositError)
+        // Continue anyway, transaction is already approved
+      }
+
+      // Send additional success notification
+      await supabase.from('notifications').insert({
+        user_id: transaction.user_id,
+        type: 'success',
+        title: 'Deposit Successful!',
+        message: `${transaction.amount} ${transaction.asset} has been added to your portfolio.`
+      })
+    }
+
     return NextResponse.json({
       success: true,
       message: `Transaction ${action}d successfully`,
-      transaction
+      transaction: updatedTransaction
     })
-
-  } catch (error) {
-    console.error('Approve/Reject error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+  } catch (error: any) {
+    console.error('Approval error:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
