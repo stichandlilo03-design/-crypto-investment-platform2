@@ -38,6 +38,7 @@ export function useAuth() {
       .select('*')
       .eq('id', userId)
       .single()
+
     setProfile(data)
   }
 
@@ -48,6 +49,7 @@ export function useAuth() {
     })
     if (!error) {
       router.push('/dashboard')
+      router.refresh()
     }
     return { data, error }
   }
@@ -62,6 +64,7 @@ export function useAuth() {
     })
     if (!error) {
       router.push('/dashboard')
+      router.refresh()
     }
     return { data, error }
   }
@@ -87,8 +90,17 @@ export function useAuth() {
   }
 
   async function signOut() {
-    await supabase.auth.signOut()
-    router.push('/')
+    try {
+      await supabase.auth.signOut()
+      // Clear local state
+      setUser(null)
+      setProfile(null)
+      // Redirect to landing page
+      router.push('/')
+      router.refresh()
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
   }
 
   return {
