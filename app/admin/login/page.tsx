@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, LogIn, Lock, Mail } from 'lucide-react'
 import Link from 'next/link'
@@ -13,18 +13,7 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-  const { user, profile, signIn, loading: authLoading } = useAuth()
-
-  // Redirect if already logged in as admin
-  useEffect(() => {
-    if (!authLoading && user) {
-      if (profile?.role === 'admin') {
-        router.push('/admin')
-      } else {
-        router.push('/dashboard')
-      }
-    }
-  }, [authLoading, user, profile, router])
+  const { signIn } = useAuth()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,35 +21,24 @@ export default function AdminLoginPage() {
     setError('')
 
     try {
+      console.log('Attempting login with:', email)
       const { error: signInError } = await signIn(email, password)
 
       if (signInError) {
+        console.error('Login error:', signInError)
         setError(signInError.message || 'Invalid credentials')
+        setLoading(false)
+        return
       }
-      // The redirect will happen via useEffect above
+
+      console.log('Login successful, redirecting...')
+      // Direct redirect after successful login
+      router.push('/admin')
     } catch (err) {
+      console.error('Network error:', err)
       setError('Network error. Please try again.')
-    } finally {
       setLoading(false)
     }
-  }
-
-  // Show loading while checking auth
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
-      </div>
-    )
-  }
-
-  // If already logged in, show loading while redirecting
-  if (user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
-      </div>
-    )
   }
 
   return (
