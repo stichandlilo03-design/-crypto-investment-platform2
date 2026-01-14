@@ -15,10 +15,39 @@ import {
   X
 } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const supabase = createClientComponentClient()
+  const router = useRouter()
+
+  // Check authentication status without redirecting
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        setIsAuthenticated(!!session)
+      } catch (error) {
+        console.error('Error checking auth:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    checkAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [supabase])
 
   const features = [
     {
@@ -84,6 +113,15 @@ export default function HomePage() {
     { value: "99.9%", label: "Uptime Guarantee" }
   ]
 
+  // Show loading state briefly
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full border-4 border-purple-500/30 border-t-purple-500 animate-spin"></div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
       {/* Navigation */}
@@ -106,13 +144,24 @@ export default function HomePage() {
               <a href="#features" className="text-sm lg:text-base text-gray-300 hover:text-white transition">Features</a>
               <a href="#testimonials" className="text-sm lg:text-base text-gray-300 hover:text-white transition">Testimonials</a>
               <a href="#about" className="text-sm lg:text-base text-gray-300 hover:text-white transition">About</a>
-              <Link href="/login" className="text-sm lg:text-base text-gray-300 hover:text-white transition">Login</Link>
-              <Link 
-                href="/register"
-                className="px-4 lg:px-6 py-2 lg:py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm lg:text-base font-medium hover:shadow-lg hover:shadow-purple-500/50 transition-all"
-              >
-                Get Started
-              </Link>
+              {isAuthenticated ? (
+                <Link 
+                  href="/dashboard"
+                  className="px-4 lg:px-6 py-2 lg:py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm lg:text-base font-medium hover:shadow-lg hover:shadow-purple-500/50 transition-all"
+                >
+                  Go to Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login" className="text-sm lg:text-base text-gray-300 hover:text-white transition">Login</Link>
+                  <Link 
+                    href="/register"
+                    className="px-4 lg:px-6 py-2 lg:py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm lg:text-base font-medium hover:shadow-lg hover:shadow-purple-500/50 transition-all"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
 
             {/* Mobile Menu Button */}
@@ -134,13 +183,24 @@ export default function HomePage() {
               <a href="#features" className="block text-gray-300 hover:text-white transition py-2">Features</a>
               <a href="#testimonials" className="block text-gray-300 hover:text-white transition py-2">Testimonials</a>
               <a href="#about" className="block text-gray-300 hover:text-white transition py-2">About</a>
-              <Link href="/login" className="block text-gray-300 hover:text-white transition py-2">Login</Link>
-              <Link 
-                href="/register"
-                className="block text-center px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium"
-              >
-                Get Started
-              </Link>
+              {isAuthenticated ? (
+                <Link 
+                  href="/dashboard"
+                  className="block text-center px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium"
+                >
+                  Go to Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login" className="block text-gray-300 hover:text-white transition py-2">Login</Link>
+                  <Link 
+                    href="/register"
+                    className="block text-center px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </motion.div>
           )}
         </div>
@@ -171,10 +231,17 @@ export default function HomePage() {
                 Join over 500,000 investors building wealth with cryptocurrency. Secure, fast, and professional investment platform trusted worldwide.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 items-center justify-center md:justify-start">
-                <Link href="/register" className="group w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold text-base sm:text-lg hover:shadow-2xl hover:shadow-purple-500/50 transition-all flex items-center justify-center">
-                  Start Investing Today
-                  <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Link>
+                {isAuthenticated ? (
+                  <Link href="/dashboard" className="group w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold text-base sm:text-lg hover:shadow-2xl hover:shadow-purple-500/50 transition-all flex items-center justify-center">
+                    Go to Dashboard
+                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                ) : (
+                  <Link href="/register" className="group w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold text-base sm:text-lg hover:shadow-2xl hover:shadow-purple-500/50 transition-all flex items-center justify-center">
+                    Start Investing Today
+                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                )}
                 <button className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl glass-effect text-white font-semibold text-base sm:text-lg hover:bg-white/10 transition-all">
                   Watch Demo
                 </button>
@@ -362,13 +429,23 @@ export default function HomePage() {
             <p className="text-base sm:text-xl text-white/90 mb-6 sm:mb-8 max-w-2xl mx-auto">
               Join thousands of investors who are already building their wealth with CryptoVault
             </p>
-            <Link 
-              href="/register"
-              className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white text-purple-600 font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all"
-            >
-              Create Free Account
-              <ArrowRight className="ml-2 w-5 h-5" />
-            </Link>
+            {isAuthenticated ? (
+              <Link 
+                href="/dashboard"
+                className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white text-purple-600 font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all"
+              >
+                Go to Dashboard
+                <ArrowRight className="ml-2 w-5 h-5" />
+              </Link>
+            ) : (
+              <Link 
+                href="/register"
+                className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white text-purple-600 font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all"
+              >
+                Create Free Account
+                <ArrowRight className="ml-2 w-5 h-5" />
+              </Link>
+            )}
           </motion.div>
         </div>
       </section>
