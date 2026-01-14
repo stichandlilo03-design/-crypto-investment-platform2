@@ -28,6 +28,7 @@ export function useAuth() {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('Auth state changed:', _event, session?.user?.email)
       setUser(session?.user ?? null)
       if (session?.user) {
         await fetchProfile(session.user.id)
@@ -152,13 +153,37 @@ export function useAuth() {
 
   async function signOut() {
     try {
-      await supabase.auth.signOut()
+      console.log('Signing out...')
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut()
+      
+      if (error) {
+        console.error('Error signing out from Supabase:', error)
+        throw error
+      }
+      
+      // Clear local state immediately
+      setUser(null)
+      setProfile(null)
+      
+      console.log('Sign out successful, redirecting to home...')
+      
+      // Redirect to home page
+      router.push('/')
+      
+      // Force a hard refresh to clear any cached data
+      setTimeout(() => {
+        router.refresh()
+      }, 100)
+      
+    } catch (error) {
+      console.error('Error in signOut function:', error)
+      // Even if there's an error, still try to redirect
       setUser(null)
       setProfile(null)
       router.push('/')
       router.refresh()
-    } catch (error) {
-      console.error('Error signing out:', error)
     }
   }
 
@@ -170,7 +195,8 @@ export function useAuth() {
     signUp,
     signInWithGoogle,
     signInWithGithub,
-    signOut
+    signOut,
+    supabase // Export supabase instance so dashboard can use it
   }
 }
 
