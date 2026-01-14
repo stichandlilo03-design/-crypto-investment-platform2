@@ -5,7 +5,7 @@ import { Mail, Lock, Wallet, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
