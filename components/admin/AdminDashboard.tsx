@@ -3,11 +3,9 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  Users, DollarSign, TrendingUp, Activity, Shield, AlertCircle, 
-  CheckCircle, XCircle, Search, Filter, Download, Settings, 
-  Bell, LogOut, Wallet, BarChart3, FileText, Clock, Eye,
-  Edit, Trash2, MoreVertical, Check, X, ExternalLink, Menu,
-  Upload, Loader2, Home, CreditCard, UserCheck, RefreshCw
+  Users, Shield, AlertCircle, CheckCircle, Bell, LogOut, 
+  BarChart3, FileText, Clock, Check, X, Menu, Upload, Loader2, 
+  Home, CreditCard, UserCheck, RefreshCw, Download, Settings
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
@@ -70,7 +68,7 @@ export default function AdminDashboard() {
   const supabase = createClientComponentClient()
   const router = useRouter()
 
-  // Load admin profile once on mount
+  // Load admin profile once on mount - no auth checks, middleware did that
   useEffect(() => {
     loadAdminProfile()
   }, [])
@@ -84,32 +82,25 @@ export default function AdminDashboard() {
   const loadAdminProfile = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/admin/login')
-        return
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+
+        if (profile) {
+          setAdminProfile(profile)
+        }
       }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      if (!profile || profile.role !== 'admin') {
-        router.push('/admin/login')
-        return
-      }
-
-      setAdminProfile(profile)
     } catch (error) {
       console.error('Profile load error:', error)
-      router.push('/admin/login')
     }
   }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    router.push('/admin/login')
+    window.location.href = '/admin/login'
   }
 
   const fetchDashboardData = async () => {
@@ -117,10 +108,8 @@ export default function AdminDashboard() {
       setLoading(true)
       
       if (selectedTab === 'dashboard') {
-        // Fetch pending transactions
         const transactionsRes = await fetch('/api/admin/transactions?status=pending')
         const transactionsData = await transactionsRes.json()
-
         if (transactionsData.success) {
           setTransactions(transactionsData.data || [])
         }
@@ -132,7 +121,6 @@ export default function AdminDashboard() {
         if (usersData.success) setUsers(usersData.data || [])
       }
 
-      // Fetch stats
       try {
         const statsRes = await fetch('/api/admin/stats')
         const statsData = await statsRes.json()
@@ -154,9 +142,7 @@ export default function AdminDashboard() {
     try {
       const response = await fetch('/api/admin/approve', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id,
           action: 'approve',
@@ -186,9 +172,7 @@ export default function AdminDashboard() {
     try {
       const response = await fetch('/api/admin/approve', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id,
           action: 'reject',
@@ -216,13 +200,8 @@ export default function AdminDashboard() {
     try {
       const response = await fetch('/api/admin/users', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          role: newRole
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, role: newRole })
       })
 
       const data = await response.json()
@@ -248,7 +227,6 @@ export default function AdminDashboard() {
   }
 
   const renderDashboard = () => {
-    // Filter transactions by type
     const pendingDeposits = transactions.filter(t => t.type === 'deposit')
     const pendingWithdrawals = transactions.filter(t => t.type === 'withdrawal')
 
@@ -292,7 +270,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Pending Transactions */}
         <div className="glass-effect rounded-2xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-display font-bold text-white flex items-center">
@@ -388,23 +365,21 @@ export default function AdminDashboard() {
                         {formatTimeAgo(transaction.created_at)}
                       </td>
                       <td className="py-4 px-4">
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => {
-                              setSelectedAction({
-                                type: transaction.type as 'deposit' | 'withdrawal',
-                                id: transaction.id,
-                                userEmail: transaction.profiles?.email || '',
-                                amount: transaction.value_usd || transaction.amount,
-                                asset: transaction.asset
-                              })
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 text-sm font-medium transition-all flex items-center space-x-1"
-                          >
-                            <Check className="w-3 h-3" />
-                            <span>Review</span>
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedAction({
+                              type: transaction.type as 'deposit' | 'withdrawal',
+                              id: transaction.id,
+                              userEmail: transaction.profiles?.email || '',
+                              amount: transaction.value_usd || transaction.amount,
+                              asset: transaction.asset
+                            })
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 text-sm font-medium transition-all flex items-center space-x-1"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Review</span>
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -461,9 +436,7 @@ export default function AdminDashboard() {
                 <tr key={user.id} className="border-b border-white/5 hover:bg-white/5">
                   <td className="py-4 px-4">
                     <div>
-                      <div className="text-white font-medium">
-                        {user.full_name || 'No Name'}
-                      </div>
+                      <div className="text-white font-medium">{user.full_name || 'No Name'}</div>
                       <div className="text-sm text-gray-400">{user.email}</div>
                     </div>
                   </td>
@@ -516,18 +489,8 @@ export default function AdminDashboard() {
     </div>
   )
 
-  // Show loading until profile loads
-  if (!adminProfile) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
-      {/* Desktop Sidebar */}
       <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40">
         <div className="flex items-center space-x-2 mb-8">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -563,41 +526,22 @@ export default function AdminDashboard() {
         </nav>
         
         <div className="absolute bottom-6 left-6 right-6 space-y-2">
-          <a
-            href="/dashboard"
-            className="flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-          >
+          <a href="/dashboard" className="flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all">
             <Home className="w-5 h-5" />
             <span>Main Site</span>
           </a>
-          
-          <button 
-            onClick={handleSignOut}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-          >
+          <button onClick={handleSignOut} className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all">
             <LogOut className="w-5 h-5" />
             <span>Logout</span>
           </button>
         </div>
       </aside>
 
-      {/* Mobile Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => setSidebarOpen(false)} 
-              className="lg:hidden fixed inset-0 bg-black/50 z-40" 
-            />
-            <motion.aside 
-              initial={{ x: -300 }} 
-              animate={{ x: 0 }} 
-              exit={{ x: -300 }}
-              className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-40" />
+            <motion.aside initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }} className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50">
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center space-x-2">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -609,7 +553,6 @@ export default function AdminDashboard() {
                   <X className="w-6 h-6 text-white" />
                 </button>
               </div>
-              
               <nav className="space-y-2">
                 {[
                   { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
@@ -622,9 +565,7 @@ export default function AdminDashboard() {
                     key={item.id}
                     onClick={() => { setSelectedTab(item.id); setSidebarOpen(false) }}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-                      selectedTab === item.id 
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-                        : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                      selectedTab === item.id ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
                     }`}
                   >
                     <item.icon className="w-5 h-5" />
@@ -632,20 +573,12 @@ export default function AdminDashboard() {
                   </button>
                 ))}
               </nav>
-              
               <div className="absolute bottom-6 left-6 right-6 space-y-2">
-                <a
-                  href="/dashboard"
-                  className="flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-                >
+                <a href="/dashboard" className="flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all">
                   <Home className="w-5 h-5" />
                   <span>Main Site</span>
                 </a>
-                
-                <button 
-                  onClick={handleSignOut}
-                  className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-                >
+                <button onClick={handleSignOut} className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all">
                   <LogOut className="w-5 h-5" />
                   <span>Logout</span>
                 </button>
@@ -655,26 +588,17 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
       <main className="lg:ml-64 p-4 sm:p-8">
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setSidebarOpen(true)} 
-              className="lg:hidden p-2 rounded-xl glass-effect"
-            >
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-xl glass-effect">
               <Menu className="w-6 h-6 text-white" />
             </button>
             <div>
               <h1 className="text-3xl font-bold text-white">
-                {selectedTab === 'dashboard' ? 'Admin Dashboard' : 
-                 selectedTab === 'users' ? 'User Management' :
-                 selectedTab.charAt(0).toUpperCase() + selectedTab.slice(1)}
+                {selectedTab === 'dashboard' ? 'Admin Dashboard' : selectedTab === 'users' ? 'User Management' : selectedTab.charAt(0).toUpperCase() + selectedTab.slice(1)}
               </h1>
-              <p className="text-gray-400">
-                Welcome back, {adminProfile?.full_name || 'Admin'}
-              </p>
+              <p className="text-gray-400">Welcome back, {adminProfile?.full_name || 'Admin'}</p>
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -683,41 +607,21 @@ export default function AdminDashboard() {
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
             </button>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-              <span className="text-white font-bold">
-                {adminProfile?.full_name?.charAt(0) || 'A'}
-              </span>
+              <span className="text-white font-bold">{adminProfile?.full_name?.charAt(0) || 'A'}</span>
             </div>
           </div>
         </div>
 
-        {/* Content Area */}
         {selectedTab === 'dashboard' && renderDashboard()}
         {selectedTab === 'users' && renderUsers()}
-        {selectedTab === 'deposits' && (
-          <div className="text-center py-12">
-            <p className="text-gray-400">Deposits management coming soon...</p>
-          </div>
-        )}
-        {selectedTab === 'withdrawals' && (
-          <div className="text-center py-12">
-            <p className="text-gray-400">Withdrawals management coming soon...</p>
-          </div>
-        )}
-        {selectedTab === 'settings' && (
-          <div className="text-center py-12">
-            <p className="text-gray-400">Settings coming soon...</p>
-          </div>
-        )}
+        {selectedTab === 'deposits' && <div className="text-center py-12"><p className="text-gray-400">Deposits management coming soon...</p></div>}
+        {selectedTab === 'withdrawals' && <div className="text-center py-12"><p className="text-gray-400">Withdrawals management coming soon...</p></div>}
+        {selectedTab === 'settings' && <div className="text-center py-12"><p className="text-gray-400">Settings coming soon...</p></div>}
       </main>
 
-      {/* Approval Modal */}
       {selectedAction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="glass-effect rounded-2xl p-6 max-w-md w-full"
-          >
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-effect rounded-2xl p-6 max-w-md w-full">
             <h3 className="text-xl font-bold text-white mb-2">
               Review {selectedAction.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
             </h3>
@@ -734,13 +638,10 @@ export default function AdminDashboard() {
                   <div className="text-white font-bold">${selectedAction.amount.toLocaleString()}</div>
                   <div className="text-sm text-gray-400">{selectedAction.amount} {selectedAction.asset}</div>
                 </div>
-                
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Type</label>
                   <span className={`px-3 py-1 rounded-full text-xs ${
-                    selectedAction.type === 'deposit' 
-                      ? 'bg-green-500/20 text-green-400' 
-                      : 'bg-red-500/20 text-red-400'
+                    selectedAction.type === 'deposit' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                   }`}>
                     {selectedAction.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
                   </span>
@@ -760,28 +661,14 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex items-center justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setSelectedAction(null)
-                  setAdminNotes('')
-                }}
-                className="px-4 py-2 rounded-xl glass-effect hover:bg-white/10 text-white transition-all"
-              >
+              <button onClick={() => { setSelectedAction(null); setAdminNotes('') }} className="px-4 py-2 rounded-xl glass-effect hover:bg-white/10 text-white transition-all">
                 Cancel
               </button>
-              
-              <button
-                onClick={() => handleReject(selectedAction.id)}
-                className="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all flex items-center space-x-2"
-              >
+              <button onClick={() => handleReject(selectedAction.id)} className="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all flex items-center space-x-2">
                 <X className="w-4 h-4" />
                 <span>Reject</span>
               </button>
-              
-              <button
-                onClick={() => handleApprove(selectedAction.id)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:opacity-90 transition-all flex items-center space-x-2"
-              >
+              <button onClick={() => handleApprove(selectedAction.id)} className="px-4 py-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:opacity-90 transition-all flex items-center space-x-2">
                 <Check className="w-4 h-4" />
                 <span>Approve</span>
               </button>
