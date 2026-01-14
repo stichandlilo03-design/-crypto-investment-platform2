@@ -39,42 +39,44 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
   const pathname = request.nextUrl.pathname
 
-  console.log('Session exists:', !!session, 'Path:', pathname)
+  console.log('Session exists:', !!session, 'User:', session?.user?.email, 'Path:', pathname)
 
   // Admin routes - ONLY check session, let the page handle role check
   if (pathname.startsWith('/admin')) {
     if (pathname === '/admin/login') {
-      console.log('On admin login page')
-      return response // Always allow access to login page
+      console.log('✅ On admin login page - ALLOWING')
+      return response
     }
 
     // For /admin route, just check if logged in
     if (!session) {
-      console.log('No session, redirect to login')
+      console.log('❌ No session on /admin, redirecting to /admin/login')
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
 
-    console.log('Session exists, allowing access to admin')
+    console.log('✅ Session exists, ALLOWING access to /admin')
     return response
   }
 
   // User dashboard routes
   if (pathname.startsWith('/dashboard')) {
     if (!session) {
-      console.log('No session, redirect to login')
+      console.log('❌ No session on /dashboard, redirect to /login')
       return NextResponse.redirect(new URL('/login', request.url))
     }
+    console.log('✅ Session exists, ALLOWING access to /dashboard')
     return response
   }
 
   // Auth pages
   if (pathname === '/login' || pathname === '/register') {
     if (session) {
-      console.log('Already logged in, redirect to dashboard')
+      console.log('⚠️ Already logged in on auth page, redirect to /dashboard')
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
 
+  console.log('✅ Default - ALLOWING')
   return response
 }
 
