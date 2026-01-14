@@ -1,55 +1,85 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+        },
+        remove(name: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value: '',
+            ...options,
+          })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({
+            name,
+            value: '',
+            ...options,
+          })
+        },
+      },
+    }
+  )
 
-  // Public routes that don't require authentication
-  const publicRoutes = ['/', '/login', '/register', '/auth/callback']
-  
-  // Protected routes that require authentication
-  const protectedRoutes = ['/dashboard', '/admin']
+  const { data: { session } } = await supabase.auth.getSession()
 
-  const pathname = req.nextUrl.pathname
-
-  // Check if current path is a protected route
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
-  
-  // Check if current path is an auth route (login/register)
-  const isAuthRoute = ['/login', '/register'].includes(pathname)
-
-  // If user is NOT signed in and trying to access protected routes, redirect to login
-  if (!session && isProtectedRoute) {
-    const redirectUrl = new URL('/login', req.url)
-    redirectUrl.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(redirectUrl)
+  // Protect dashboard and admin routes
+  if (request.nextUrl.pathname.startsWith('/dashboard') || 
+      request.nextUrl.pathname.startsWith('/admin')) {
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
   }
 
-  // If user IS signed in and trying to access login/register, redirect to dashboard
-  if (session && isAuthRoute) {
-    const redirectUrl = new URL('/dashboard', req.url)
-    return NextResponse.redirect(redirectUrl)
+  // Redirect logged-in users away from auth pages
+  if (request.nextUrl.pathname.startsWith('/login') || 
+      request.nextUrl.pathname.startsWith('/register')) {
+    if (session) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
   }
 
-  // Allow all other routes (including landing page)
-  return res
+  return response
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - api (API routes)
-     */
-    '/((?!_next/static|_next/image|favicon.ico|api).*)',
+    '/dashboard/:path*',
+    '/admin/:path*',
+    '/login',
+    '/register',
   ],
 }
