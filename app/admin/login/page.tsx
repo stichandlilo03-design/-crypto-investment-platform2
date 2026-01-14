@@ -19,59 +19,21 @@ export default function AdminLoginPage() {
     setError('')
 
     try {
-      console.log('Attempting login with:', email)
-      
-      // Sign in
-      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (signInError) {
-        console.error('Login error:', signInError)
         setError(signInError.message || 'Invalid credentials')
         setLoading(false)
         return
       }
 
-      console.log('Login response:', { data: authData, error: signInError })
-
-      if (!authData.user) {
-        setError('Login failed')
-        setLoading(false)
-        return
-      }
-
-      // Check admin role
-      console.log('Checking admin role for user:', authData.user.id)
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', authData.user.id)
-        .single()
-
-      console.log('Profile data:', profileData)
-
-      if (profileError || !profileData) {
-        setError('Failed to verify admin privileges')
-        setLoading(false)
-        return
-      }
-
-      if (profileData.role !== 'admin') {
-        setError('Access denied. Admin privileges required.')
-        await supabase.auth.signOut()
-        setLoading(false)
-        return
-      }
-
-      console.log('Admin verified, redirecting with window.location...')
-      
-      // Use window.location instead of router to force a hard navigation
+      // Redirect - middleware will check role
       window.location.href = '/admin'
     } catch (err) {
-      console.error('Network error:', err)
-      setError('Network error. Please try again.')
+      setError('Login failed. Please try again.')
       setLoading(false)
     }
   }
