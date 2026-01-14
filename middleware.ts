@@ -17,16 +17,6 @@ export async function middleware(request: NextRequest) {
           return request.cookies.get(name)?.value
         },
         set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
           response.cookies.set({
             name,
             value,
@@ -34,16 +24,6 @@ export async function middleware(request: NextRequest) {
           })
         },
         remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
           response.cookies.set({
             name,
             value: '',
@@ -54,15 +34,16 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Get session
+  // Get the current session
   const { data: { session } } = await supabase.auth.getSession()
+  const pathname = request.nextUrl.pathname
 
-  // ADMIN ROUTES
-  if (request.nextUrl.pathname.startsWith('/admin')) {
-    // Allow access to admin login page
-    if (request.nextUrl.pathname === '/admin/login') {
+  // 1. Handle Admin Routes
+  if (pathname.startsWith('/admin')) {
+    // Allow admin login page for everyone
+    if (pathname === '/admin/login') {
       if (session) {
-        // User is logged in, check if admin
+        // Check if logged in user is admin
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -77,11 +58,11 @@ export async function middleware(request: NextRequest) {
           return NextResponse.redirect(new URL('/dashboard', request.url))
         }
       }
-      // No session, allow access to admin login
+      // No session, allow access
       return response
     }
 
-    // Protect other admin routes
+    // For all other admin routes, check authentication and role
     if (!session) {
       // Not logged in, redirect to admin login
       return NextResponse.redirect(new URL('/admin/login', request.url))
@@ -95,19 +76,19 @@ export async function middleware(request: NextRequest) {
       .single()
 
     if (profile?.role !== 'admin') {
-      // Not an admin, redirect to user dashboard
+      // Not an admin, redirect to dashboard
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
 
-  // USER DASHBOARD ROUTES
-  if (request.nextUrl.pathname.startsWith('/dashboard')) {
+  // 2. Handle User Dashboard Routes
+  if (pathname.startsWith('/dashboard')) {
     if (!session) {
       // Not logged in, redirect to login
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    // Check if user is admin trying to access user dashboard
+    // Check if user is admin
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -115,16 +96,15 @@ export async function middleware(request: NextRequest) {
       .single()
 
     if (profile?.role === 'admin') {
-      // Admin user, redirect to admin dashboard
+      // Admin user, redirect to admin
       return NextResponse.redirect(new URL('/admin', request.url))
     }
   }
 
-  // AUTH PAGES (Login/Register)
-  if (request.nextUrl.pathname.startsWith('/login') || 
-      request.nextUrl.pathname.startsWith('/register')) {
+  // 3. Handle Auth Pages (Login/Register)
+  if (pathname === '/login' || pathname === '/register') {
     if (session) {
-      // User is logged in, check role
+      // Check if user is admin
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -132,10 +112,10 @@ export async function middleware(request: NextRequest) {
         .single()
 
       if (profile?.role === 'admin') {
-        // Admin user, redirect to admin dashboard
+        // Admin user, redirect to admin
         return NextResponse.redirect(new URL('/admin', request.url))
       } else {
-        // Regular user, redirect to user dashboard
+        // Regular user, redirect to dashboard
         return NextResponse.redirect(new URL('/dashboard', request.url))
       }
     }
