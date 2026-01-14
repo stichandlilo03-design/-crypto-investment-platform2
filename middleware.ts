@@ -2,8 +2,6 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  console.log('🔍 Middleware checking:', request.nextUrl.pathname)
-  
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -39,44 +37,46 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
   const pathname = request.nextUrl.pathname
 
-  console.log('Session exists:', !!session, 'User:', session?.user?.email, 'Path:', pathname)
+  // Admin login - always allow
+  if (pathname === '/admin/login') {
+    return response
+  }
 
-  // Admin routes - ONLY check session, let the page handle role check
+  // Admin routes - check session AND role
   if (pathname.startsWith('/admin')) {
-    if (pathname === '/admin/login') {
-      console.log('✅ On admin login page - ALLOWING')
-      return response
-    }
-
-    // For /admin route, just check if logged in
     if (!session) {
-      console.log('❌ No session on /admin, redirecting to /admin/login')
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
 
-    console.log('✅ Session exists, ALLOWING access to /admin')
+    // Check admin role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
+
+    if (profile?.role !== 'admin') {
+      return NextResponse.redirect(new URL('/admin/login', request.url))
+    }
+
     return response
   }
 
-  // User dashboard routes
+  // Dashboard routes
   if (pathname.startsWith('/dashboard')) {
     if (!session) {
-      console.log('❌ No session on /dashboard, redirect to /login')
       return NextResponse.redirect(new URL('/login', request.url))
     }
-    console.log('✅ Session exists, ALLOWING access to /dashboard')
     return response
   }
 
-  // Auth pages
+  // Auth pages - redirect if logged in
   if (pathname === '/login' || pathname === '/register') {
     if (session) {
-      console.log('⚠️ Already logged in on auth page, redirect to /dashboard')
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
 
-  console.log('✅ Default - ALLOWING')
   return response
 }
 
