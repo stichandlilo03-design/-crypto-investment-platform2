@@ -12,6 +12,8 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import { useState, useEffect, useRef, useMemo } from 'react'
+import KYCVerification from '@/components/KYCVerification'
+import { Clock } from 'lucide-react' // Add Clock icon
 
 
 // Define types based on your Supabase schema
@@ -158,6 +160,12 @@ export default function DashboardPage() {
     }
   }, [user, supabase])
 
+  // Check KYC status and redirect to verification
+useEffect(() => {
+  if (profile && !profile.kyc_verified && profile.kyc_status !== 'pending') {
+    setSelectedTab('kyc-verification')
+  }
+}, [profile])
 
   // Fetch real crypto prices
   useEffect(() => {
@@ -586,6 +594,64 @@ export default function DashboardPage() {
           )}
         </AnimatePresence>
 
+        {/* KYC Pending Banner */}
+{profile?.kyc_status === 'pending' && (
+  <motion.div
+    initial={{ opacity: 0, y: -10 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl"
+  >
+    <div className="flex items-center space-x-3">
+      <Clock className="w-5 h-5 text-yellow-400" />
+      <div>
+        <p className="text-yellow-400 font-medium">KYC Verification Pending</p>
+        <p className="text-yellow-400/80 text-sm">
+          Your documents are being reviewed. You'll be notified once verified (24-48 hours).
+        </p>
+      </div>
+    </div>
+  </motion.div>
+)}
+
+{/* KYC Rejected Banner */}
+{profile?.kyc_status === 'rejected' && (
+  <motion.div
+    initial={{ opacity: 0, y: -10 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
+  >
+    <div className="flex items-center justify-between">
+      <div className="flex items-center space-x-3">
+        <AlertCircle className="w-5 h-5 text-red-400" />
+        <div>
+          <p className="text-red-400 font-medium">KYC Verification Rejected</p>
+          <p className="text-red-400/80 text-sm">
+            Reason: {profile.kyc_rejection_reason || 'Documents did not meet requirements'}
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={() => setSelectedTab('kyc-verification')}
+        className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30"
+      >
+        Resubmit
+      </button>
+    </div>
+  </motion.div>
+)}
+
+{/* KYC Verification Tab */}
+{selectedTab === 'kyc-verification' && (
+  <KYCVerification 
+    userId={user?.id || ''} 
+    profile={profile}
+    onSuccess={() => {
+      setSelectedTab('overview')
+      window.location.reload()
+    }}
+  />
+)}
+        
         {/* Content Tabs */}
         {selectedTab === 'overview' && <OverviewTab 
           profile={profile} 
