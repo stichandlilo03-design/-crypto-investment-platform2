@@ -1,12 +1,35 @@
-// @ts-nocheck
-
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = createRouteHandlerClient({ cookies })
+    
+    // Check if user is authenticated and is admin
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
+
+    if (profile?.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Admin privileges required' },
+        { status: 403 }
+      )
+    }
+
     const { type, id, action, adminNotes } = await request.json()
-    const adminId = request.headers.get('x-admin-id') || 'admin'
 
     if (!type || !id || !action) {
       return NextResponse.json(
@@ -15,123 +38,75 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (type === 'deposit') {
-      const status = action === 'approve' ? 'approved' : 'rejected'
-      
-      const { data: deposit, error } = await supabaseAdmin
-        .from('deposits')
-        .update({
-          status,
-          admin_notes: adminNotes || null,
-          approved_by: adminId,
-          approved_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .select()
-        .single()
+    const table = type === 'deposit' ? 'deposits' : 'withdrawals'
+    const status = action === 'approve' 
+      ? (type === 'deposit' ? 'approved' : 'processing') 
+      : 'rejected'
 
-      if (error || !deposit) {
-        return NextResponse.json(
-          { error: 'Failed to update deposit' },
-          { status: 500 }
+    // Update the transaction
+    const { data: transaction, error: updateError } = await supabase
+      .from(table)
+      .update({
+        status,
+        admin_notes: adminNotes,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: session.user.id
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        users (
+          email,
+          full_name
         )
-      }
+      `)
+      .single()
 
-      if (action === 'approve') {
-        const { data: user } = await supabaseAdmin
-          .from('users')
-          .select('balance, total_deposits')
-          .eq('id', deposit.user_id)
-          .single()
-
-        if (user) {
-          await supabaseAdmin
-            .from('users')
-            .update({
-              balance: (user.balance || 0) + deposit.amount,
-              total_deposits: (user.total_deposits || 0) + deposit.amount,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', deposit.user_id)
-        }
-      }
-
-      const transactionStatus = action === 'approve' ? 'completed' : 'failed'
-      await supabaseAdmin
-        .from('transactions')
-        .update({ status: transactionStatus })
-        .eq('user_id', deposit.user_id)
-        .eq('type', 'deposit')
-        .eq('amount', deposit.amount)
-        .eq('asset', deposit.asset)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-    } else if (type === 'withdrawal') {
-      const status = action === 'approve' ? 'processing' : 'rejected'
-      
-      const { data: withdrawal, error } = await supabaseAdmin
-        .from('withdrawals')
-        .update({
-          status,
-          admin_notes: adminNotes || null,
-          approved_by: adminId,
-          approved_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error || !withdrawal) {
-        return NextResponse.json(
-          { error: 'Failed to update withdrawal' },
-          { status: 500 }
-        )
-      }
-
-      if (action === 'approve') {
-        const { data: user } = await supabaseAdmin
-          .from('users')
-          .select('balance, total_withdrawals')
-          .eq('id', withdrawal.user_id)
-          .single()
-
-        if (user) {
-          await supabaseAdmin
-            .from('users')
-            .update({
-              balance: (user.balance || 0) - withdrawal.amount,
-              total_withdrawals: (user.total_withdrawals || 0) + withdrawal.amount,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', withdrawal.user_id)
-        }
-      }
-
-      const transactionStatus = action === 'approve' ? 'processing' : 'failed'
-      await supabaseAdmin
-        .from('transactions')
-        .update({ status: transactionStatus })
-        .eq('user_id', withdrawal.user_id)
-        .eq('type', 'withdrawal')
-        .eq('amount', -withdrawal.amount)
-        .eq('asset', withdrawal.asset)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-    } else {
+    if (updateError) {
+      console.error('Update error:', updateError)
       return NextResponse.json(
-        { error: 'Invalid type' },
-        { status: 400 }
+        { error: 'Failed to update transaction' },
+        { status: 500 }
       )
     }
 
+    // If approving a deposit, update user balance
+    if (type === 'deposit' && action === 'approve') {
+      const { error: balanceError } = await supabase.rpc('update_user_balance', {
+        user_id: transaction.user_id,
+        amount: transaction.amount,
+        asset: transaction.asset
+      })
+
+      if (balanceError) {
+        console.error('Balance update error:', balanceError)
+        // Continue anyway, but log the error
+      }
+    }
+
+    // Send notification to user
+    await supabase.from('notifications').insert({
+      user_id: transaction.user_id,
+      title: `Transaction ${action === 'approve' ? 'Approved' : 'Rejected'}`,
+      message: `Your ${type} of $${transaction.amount} ${transaction.asset} has been ${action === 'approve' ? 'approved' : 'rejected'}.`,
+      type: 'transaction',
+      metadata: {
+        transaction_id: id,
+        transaction_type: type,
+        amount: transaction.amount,
+        asset: transaction.asset,
+        action
+      }
+    })
+
     return NextResponse.json({
       success: true,
-      message: `${type} ${action}d successfully`
+      message: `Transaction ${action}d successfully`,
+      transaction
     })
+
   } catch (error) {
-    console.error('Approval API error:', error)
+    console.error('Approve/Reject error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
