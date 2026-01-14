@@ -42,24 +42,35 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Admin routes - check session AND role
+  // Admin routes - SIMPLIFIED
   if (pathname.startsWith('/admin')) {
     if (!session) {
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
 
-    // Check admin role
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
+    try {
+      // Check admin role with timeout
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
 
-    if (profile?.role !== 'admin') {
+      // If error OR not admin, redirect
+      if (error || !profile || profile.role !== 'admin') {
+        console.error('Admin check failed:', error || 'Not admin role')
+        // Sign out invalid user
+        await supabase.auth.signOut()
+        return NextResponse.redirect(new URL('/admin/login', request.url))
+      }
+
+      // Success - allow access
+      return response
+    } catch (err) {
+      console.error('Middleware exception:', err)
+      await supabase.auth.signOut()
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
-
-    return response
   }
 
   // Dashboard routes
@@ -70,7 +81,7 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Auth pages - redirect if logged in
+  // Auth pages
   if (pathname === '/login' || pathname === '/register') {
     if (session) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
