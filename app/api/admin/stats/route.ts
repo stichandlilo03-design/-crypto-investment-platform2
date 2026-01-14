@@ -4,11 +4,11 @@ import { cookies } from 'next/headers'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     
     // Check if user is authenticated and is admin
     const { data: { session } } = await supabase.auth.getSession()
-
     if (!session) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -34,45 +34,48 @@ export async function GET(request: NextRequest) {
       .from('profiles')
       .select('*', { count: 'exact', head: true })
 
-    // Get pending deposits
+    // Get pending deposits from transactions table
     const { count: pendingDeposits } = await supabase
-      .from('deposits')
+      .from('transactions')
       .select('*', { count: 'exact', head: true })
+      .eq('type', 'deposit')
       .eq('status', 'pending')
 
-    // Get pending withdrawals
+    // Get pending withdrawals from transactions table
     const { count: pendingWithdrawals } = await supabase
-      .from('withdrawals')
+      .from('transactions')
       .select('*', { count: 'exact', head: true })
+      .eq('type', 'withdrawal')
       .eq('status', 'pending')
 
-    // Get total deposit volume
+    // Get total approved deposits volume
     const { data: deposits } = await supabase
-      .from('deposits')
-      .select('amount, status')
+      .from('transactions')
+      .select('amount, value_usd')
+      .eq('type', 'deposit')
       .eq('status', 'approved')
 
-    // Get total withdrawal volume
+    // Get total approved withdrawals volume
     const { data: withdrawals } = await supabase
-      .from('withdrawals')
-      .select('amount, status')
-      .eq('status', 'completed')
+      .from('transactions')
+      .select('amount, value_usd')
+      .eq('type', 'withdrawal')
+      .eq('status', 'approved')
 
-    const totalDepositVolume = deposits?.reduce((sum, deposit) => sum + (deposit.amount || 0), 0) || 0
-    const totalWithdrawalVolume = withdrawals?.reduce((sum, withdrawal) => sum + (withdrawal.amount || 0), 0) || 0
+    const totalDeposits = deposits?.reduce((sum, deposit) => sum + (deposit.value_usd || deposit.amount || 0), 0) || 0
+    const totalWithdrawals = withdrawals?.reduce((sum, withdrawal) => sum + (withdrawal.value_usd || withdrawal.amount || 0), 0) || 0
 
     return NextResponse.json({
       success: true,
       data: {
         totalUsers: totalUsers || 0,
+        totalDeposits,
+        totalWithdrawals,
+        totalVolume: totalDeposits + totalWithdrawals,
         pendingDeposits: pendingDeposits || 0,
-        pendingWithdrawals: pendingWithdrawals || 0,
-        totalDepositVolume,
-        totalWithdrawalVolume,
-        totalVolume: totalDepositVolume + totalWithdrawalVolume
+        pendingWithdrawals: pendingWithdrawals || 0
       }
     })
-
   } catch (error) {
     console.error('Stats fetch error:', error)
     return NextResponse.json(
