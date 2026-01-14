@@ -1,80 +1,83 @@
-// @ts-nocheck
-
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, amount, asset, paymentProof, txHash } = await request.json()
-
-    if (!userId || !amount || !asset) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const depositId = crypto.randomUUID()
-    const { error } = await supabaseAdmin
-      .from('deposits')
+    const { amount, asset, paymentProof, txHash, payment_method, wallet_address } = await request.json()
+    
+    if (!amount || !asset) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    // Insert directly into transactions table
+    const { data, error } = await supabase
+      .from('transactions')
       .insert({
-        id: depositId,
-        user_id: userId,
-        amount,
-        asset,
-        tx_hash: txHash || null,
+        user_id: session.user.id,
+        type: 'deposit',
+        amount: parseFloat(amount),
+        asset: asset,
+        value_usd: parseFloat(amount),
+        status: 'pending',
         payment_proof_url: paymentProof || null,
-        status: 'pending'
+        wallet_address: wallet_address || null,
+        payment_method: payment_method || null
       })
+      .select()
+      .single()
 
     if (error) {
       console.error('Deposit creation error:', error)
-      return NextResponse.json(
-        { error: 'Failed to create deposit' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to create deposit' }, { status: 500 })
     }
 
-    await supabaseAdmin
-      .from('transactions')
-      .insert({
-        id: crypto.randomUUID(),
-        user_id: userId,
-        type: 'deposit',
-        amount,
-        asset,
-        description: `Deposit ${amount} ${asset}`,
-        status: 'pending'
-      })
+    // Create notification
+    await supabase.from('notifications').insert({
+      user_id: session.user.id,
+      type: 'deposit',
+      title: 'Deposit Request Submitted',
+      message: `Your deposit of ${amount} ${asset} is pending approval.`
+    })
 
     return NextResponse.json({
       success: true,
-      depositId,
+      id: data.id,
       message: 'Deposit request submitted successfully. Waiting for admin approval.'
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Deposit API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
     const status = searchParams.get('status')
 
-    let query = supabaseAdmin
-      .from('deposits')
+    let query = supabase
+      .from('transactions')
       .select('*')
+      .eq('user_id', session.user.id)
+      .eq('type', 'deposit')
       .order('created_at', { ascending: false })
-
-    if (userId) {
-      query = query.eq('user_id', userId)
-    }
     
     if (status) {
       query = query.eq('status', status)
@@ -84,18 +87,12 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching deposits:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch deposits' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to fetch deposits' }, { status: 500 })
     }
 
-    return NextResponse.json({ deposits: data })
-  } catch (error) {
+    return NextResponse.json({ success: true, deposits: data })
+  } catch (error: any) {
     console.error('Deposits GET error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
