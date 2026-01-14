@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, LogIn, Lock, Mail } from 'lucide-react'
 import Link from 'next/link'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
@@ -13,7 +13,7 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-  const { signIn } = useAuth()
+  const supabase = createClientComponentClient()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -22,7 +22,12 @@ export default function AdminLoginPage() {
 
     try {
       console.log('Attempting login with:', email)
-      const { error: signInError } = await signIn(email, password)
+      
+      // Sign in
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
       if (signInError) {
         console.error('Login error:', signInError)
@@ -31,9 +36,40 @@ export default function AdminLoginPage() {
         return
       }
 
-      console.log('Login successful, redirecting...')
-      // Direct redirect after successful login
+      console.log('Login response:', { data: authData, error: signInError })
+
+      if (!authData.user) {
+        setError('Login failed')
+        setLoading(false)
+        return
+      }
+
+      // Check admin role
+      console.log('Checking admin role for user:', authData.user.id)
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single()
+
+      console.log('Profile data:', profileData)
+
+      if (profileError || !profileData) {
+        setError('Failed to verify admin privileges')
+        setLoading(false)
+        return
+      }
+
+      if (profileData.role !== 'admin') {
+        setError('Access denied. Admin privileges required.')
+        await supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
+
+      console.log('Admin verified, redirecting...')
       router.push('/admin')
+      router.refresh()
     } catch (err) {
       console.error('Network error:', err)
       setError('Network error. Please try again.')
