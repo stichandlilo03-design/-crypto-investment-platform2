@@ -54,13 +54,15 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // Refresh session if expired
   const { data: { session } } = await supabase.auth.getSession()
 
   // Protect dashboard and admin routes
   if (request.nextUrl.pathname.startsWith('/dashboard') || 
       request.nextUrl.pathname.startsWith('/admin')) {
     if (!session) {
-      return NextResponse.redirect(new URL('/login', request.url))
+      const redirectUrl = new URL('/login', request.url)
+      return NextResponse.redirect(redirectUrl)
     }
   }
 
@@ -68,7 +70,8 @@ export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith('/login') || 
       request.nextUrl.pathname.startsWith('/register')) {
     if (session) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+      const redirectUrl = new URL('/dashboard', request.url)
+      return NextResponse.redirect(redirectUrl)
     }
   }
 
