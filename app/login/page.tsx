@@ -3,8 +3,9 @@
 import { motion } from 'framer-motion'
 import { Mail, Lock, Wallet, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -14,7 +15,19 @@ export default function LoginPage() {
     password: ''
   })
   
-  const { signIn, signInWithGoogle, signInWithGithub, loading } = useAuth()
+  const { user, profile, signIn, signInWithGoogle, signInWithGithub, loading: authLoading } = useAuth()
+  const router = useRouter()
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      if (profile?.role === 'admin') {
+        router.push('/admin')
+      } else {
+        router.push('/dashboard')
+      }
+    }
+  }, [authLoading, user, profile, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,7 +41,7 @@ export default function LoginPage() {
         return
       }
       
-      // signIn function in useAuth already handles navigation
+      // The redirect will happen via the useEffect above
     } catch (err) {
       setError('An unexpected error occurred')
       console.error('Login error:', err)
@@ -61,6 +74,24 @@ export default function LoginPage() {
       setError('GitHub login failed')
       console.error('GitHub login error:', err)
     }
+  }
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  // If already logged in, show loading while redirecting
+  if (user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+      </div>
+    )
   }
 
   return (
@@ -112,7 +143,7 @@ export default function LoginPage() {
                   className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   placeholder="you@example.com"
                   required
-                  disabled={loading}
+                  disabled={authLoading}
                 />
               </div>
             </div>
@@ -133,13 +164,13 @@ export default function LoginPage() {
                   className="w-full pl-12 pr-12 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   placeholder="••••••••"
                   required
-                  disabled={loading}
+                  disabled={authLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-white transition-colors"
-                  disabled={loading}
+                  disabled={authLoading}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
@@ -161,10 +192,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={authLoading}
               className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {authLoading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
@@ -180,7 +211,7 @@ export default function LoginPage() {
           <div className="grid grid-cols-2 gap-4">
             <button 
               onClick={handleGoogleLogin}
-              disabled={loading}
+              disabled={authLoading}
               className="py-3 px-6 rounded-xl glass-effect hover:bg-white/10 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -193,7 +224,7 @@ export default function LoginPage() {
             </button>
             <button 
               onClick={handleGithubLogin}
-              disabled={loading}
+              disabled={authLoading}
               className="py-3 px-6 rounded-xl glass-effect hover:bg-white/10 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
             >
               <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -209,6 +240,16 @@ export default function LoginPage() {
               Sign up for free
             </Link>
           </p>
+        </div>
+
+        <div className="mt-6 text-center">
+          <Link
+            href="/admin/login"
+            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
+          >
+            <span>Are you an admin?</span>
+            <span className="text-purple-400">Admin Login →</span>
+          </Link>
         </div>
       </motion.div>
     </div>
