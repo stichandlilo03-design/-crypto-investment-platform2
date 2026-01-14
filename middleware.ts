@@ -2,6 +2,13 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+  
+  // Skip middleware for admin login page
+  if (pathname === '/admin/login') {
+    return NextResponse.next()
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -34,47 +41,69 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
-  const pathname = request.nextUrl.pathname
-
-  // Admin login - always allow
-  if (pathname === '/admin/login') {
-    return response
-  }
-
-  // Admin routes - SIMPLIFIED
+  // Admin routes
   if (pathname.startsWith('/admin')) {
-    if (!session) {
-      return NextResponse.redirect(new URL('/admin/login', request.url))
-    }
-
     try {
-      // Check admin role with timeout
-      const { data: profile, error } = await supabase
+      // Get session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.error('[MIDDLEWARE] Session error:', sessionError)
+        return NextResponse.redirect(new URL('/admin/login', request.url))
+      }
+
+      if (!session?.user) {
+        console.log('[MIDDLEWARE] No session found')
+        return NextResponse.redirect(new URL('/admin/login', request.url))
+      }
+
+      console.log('[MIDDLEWARE] User logged in:', session.user.email)
+
+      // Get profile with timeout
+      const profilePromise = supabase
         .from('profiles')
         .select('role')
         .eq('id', session.user.id)
         .single()
 
-      // If error OR not admin, redirect
-      if (error || !profile || profile.role !== 'admin') {
-        console.error('Admin check failed:', error || 'Not admin role')
-        // Sign out invalid user
-        await supabase.auth.signOut()
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
+      )
+
+      const { data: profile, error: profileError } = await Promise.race([
+        profilePromise,
+        timeoutPromise
+      ]) as any
+
+      if (profileError) {
+        console.error('[MIDDLEWARE] Profile fetch error:', profileError.message)
         return NextResponse.redirect(new URL('/admin/login', request.url))
       }
 
-      // Success - allow access
+      if (!profile) {
+        console.error('[MIDDLEWARE] No profile found for user:', session.user.email)
+        return NextResponse.redirect(new URL('/admin/login', request.url))
+      }
+
+      console.log('[MIDDLEWARE] Profile role:', profile.role)
+
+      if (profile.role !== 'admin') {
+        console.error('[MIDDLEWARE] User is not admin:', session.user.email, 'Role:', profile.role)
+        return NextResponse.redirect(new URL('/admin/login', request.url))
+      }
+
+      console.log('[MIDDLEWARE] ✅ Admin access granted:', session.user.email)
       return response
-    } catch (err) {
-      console.error('Middleware exception:', err)
-      await supabase.auth.signOut()
+
+    } catch (error: any) {
+      console.error('[MIDDLEWARE] Exception:', error.message)
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
   }
 
   // Dashboard routes
   if (pathname.startsWith('/dashboard')) {
+    const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
@@ -83,6 +112,7 @@ export async function middleware(request: NextRequest) {
 
   // Auth pages
   if (pathname === '/login' || pathname === '/register') {
+    const { data: { session } } = await supabase.auth.getSession()
     if (session) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
