@@ -19,7 +19,8 @@ export default function AdminLoginPage() {
     setError('')
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      // Sign in
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -30,7 +31,30 @@ export default function AdminLoginPage() {
         return
       }
 
-      // Redirect - middleware will check role
+      if (!data.user) {
+        setError('Login failed')
+        setLoading(false)
+        return
+      }
+
+      // Verify admin role
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single()
+
+      if (profileError || !profile || profile.role !== 'admin') {
+        setError('Access denied. Admin privileges required.')
+        await supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
+
+      // Wait for cookies to be set
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      // Hard redirect to ensure cookies are sent
       window.location.href = '/admin'
     } catch (err) {
       setError('Login failed. Please try again.')
@@ -68,6 +92,7 @@ export default function AdminLoginPage() {
                   className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                   placeholder="admin@example.com"
                   required
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -85,6 +110,7 @@ export default function AdminLoginPage() {
                   className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -103,7 +129,7 @@ export default function AdminLoginPage() {
               {loading ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Authenticating...</span>
+                  <span>Verifying Access...</span>
                 </>
               ) : (
                 <>
