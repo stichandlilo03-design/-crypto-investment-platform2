@@ -2,11 +2,10 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase/client'
 
 export default function AuthCallback() {
   const router = useRouter()
-  const supabase = createClientComponentClient()
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -35,7 +34,7 @@ export default function AuthCallback() {
     }
 
     handleCallback()
-  }, [router, supabase])
+  }, [router])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
