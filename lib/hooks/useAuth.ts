@@ -1,29 +1,36 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { createSupabaseClient } from '@/lib/supabase/client'
 import { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const supabase = createSupabaseClient()
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
+    const getInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        setUser(session?.user ?? null)
+        if (session?.user) {
+          await fetchProfile(session.user.id)
+        }
+      } catch (error) {
+        console.error('Error getting initial session:', error)
       }
-      setLoading(false)
-    })
+    }
+
+    getInitialSession()
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) {
-        fetchProfile(session.user.id)
+        await fetchProfile(session.user.id)
       } else {
         setProfile(null)
       }
@@ -33,69 +40,121 @@ export function useAuth() {
   }, [])
 
   async function fetchProfile(userId: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-
-    setProfile(data)
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      
+      if (error) throw error
+      setProfile(data)
+    } catch (error) {
+      console.error('Error fetching profile:', error)
+    }
   }
 
   async function signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
-    if (!error) {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+      
+      if (error) {
+        setLoading(false)
+        return { data: null, error }
+      }
+
+      // Wait a bit for the session to be established
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Navigate to dashboard
       router.push('/dashboard')
       router.refresh()
+      
+      setLoading(false)
+      return { data, error: null }
+    } catch (error: any) {
+      setLoading(false)
+      return { data: null, error }
     }
-    return { data, error }
   }
 
   async function signUp(email: string, password: string, metadata: any) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: metadata
+    setLoading(true)
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: metadata,
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
+      })
+      
+      if (error) {
+        setLoading(false)
+        return { data: null, error }
       }
-    })
-    if (!error) {
-      router.push('/dashboard')
-      router.refresh()
+
+      // Check if email confirmation is required
+      if (data.user && !data.session) {
+        setLoading(false)
+        return { 
+          data, 
+          error: null,
+          message: 'Please check your email to confirm your account'
+        }
+      }
+
+      // If session exists, redirect to dashboard
+      if (data.session) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        router.push('/dashboard')
+        router.refresh()
+      }
+      
+      setLoading(false)
+      return { data, error: null }
+    } catch (error: any) {
+      setLoading(false)
+      return { data: null, error }
     }
-    return { data, error }
   }
 
   async function signInWithGoogle() {
+    setLoading(true)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`
       }
     })
+    
+    if (error) setLoading(false)
     return { error }
   }
 
   async function signInWithGithub() {
+    setLoading(true)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`
       }
     })
+    
+    if (error) setLoading(false)
     return { error }
   }
 
   async function signOut() {
     try {
       await supabase.auth.signOut()
-      // Clear local state
       setUser(null)
       setProfile(null)
-      // Redirect to landing page
       router.push('/')
       router.refresh()
     } catch (error) {
