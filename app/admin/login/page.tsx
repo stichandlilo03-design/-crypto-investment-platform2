@@ -2,7 +2,6 @@
 
 import { motion } from 'framer-motion'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Shield, LogIn, Lock, Mail } from 'lucide-react'
 import Link from 'next/link'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
@@ -12,7 +11,6 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
   const supabase = createClientComponentClient()
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -67,9 +65,10 @@ export default function AdminLoginPage() {
         return
       }
 
-      console.log('Admin verified, redirecting...')
-      router.push('/admin')
-      router.refresh()
+      console.log('Admin verified, redirecting with window.location...')
+      
+      // Use window.location instead of router to force a hard navigation
+      window.location.href = '/admin'
     } catch (err) {
       console.error('Network error:', err)
       setError('Network error. Please try again.')
