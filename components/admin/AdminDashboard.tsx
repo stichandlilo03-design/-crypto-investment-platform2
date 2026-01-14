@@ -10,6 +10,7 @@ import {
 import { formatDistanceToNow } from 'date-fns'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
+import AdminNotifications from '@/components/AdminNotifications'
 
 interface Transaction {
   id: string
@@ -643,10 +644,7 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <button className="p-2.5 rounded-xl glass-effect hover:bg-white/10 relative">
-              <Bell className="w-5 h-5 text-white" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
-            </button>
+            <AdminNotifications />
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold">{adminProfile?.full_name?.charAt(0) || 'A'}</span>
             </div>
