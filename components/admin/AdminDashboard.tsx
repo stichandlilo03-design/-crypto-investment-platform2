@@ -80,28 +80,43 @@ export default function AdminDashboard() {
   }, [selectedTab, adminProfile])
 
   const loadAdminProfile = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single()
-
-        if (profile) {
-          setAdminProfile(profile)
-        }
-      }
-    } catch (error) {
-      console.error('Profile load error:', error)
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      console.error('No user found')
+      return
     }
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (error) {
+      console.error('Error fetching profile:', error)
+      return
+    }
+
+    if (profile) {
+      setAdminProfile(profile)
+    }
+  } catch (error) {
+    console.error('Profile load error:', error)
   }
+}
 
   const handleSignOut = async () => {
+  try {
     await supabase.auth.signOut()
+    router.push('/admin/login')
+  } catch (error) {
+    console.error('Sign out error:', error)
+    // Force redirect even on error
     window.location.href = '/admin/login'
   }
+}
 
   const fetchDashboardData = async () => {
     try {
