@@ -2,6 +2,8 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  console.log('🔍 Middleware checking:', request.nextUrl.pathname)
+  
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -37,124 +39,39 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
   const pathname = request.nextUrl.pathname
 
-  // Admin routes
+  console.log('Session exists:', !!session, 'Path:', pathname)
+
+  // Admin routes - ONLY check session, let the page handle role check
   if (pathname.startsWith('/admin')) {
-    // Allow access to admin login page without redirect loop
     if (pathname === '/admin/login') {
-      // If already logged in, check role and redirect appropriately
-      if (session) {
-        try {
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single()
-
-          // If profile fetch fails, let them stay on login to see the error
-          if (error) {
-            console.error('Middleware profile fetch error at /admin/login:', error)
-            return response
-          }
-
-          if (profile?.role === 'admin') {
-            return NextResponse.redirect(new URL('/admin', request.url))
-          } else {
-            return NextResponse.redirect(new URL('/dashboard', request.url))
-          }
-        } catch (err) {
-          console.error('Middleware error at /admin/login:', err)
-          return response
-        }
-      }
-      return response
+      console.log('On admin login page')
+      return response // Always allow access to login page
     }
 
-    // Protect other admin routes
+    // For /admin route, just check if logged in
     if (!session) {
+      console.log('No session, redirect to login')
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
 
-    try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single()
-
-      // If profile fetch fails, redirect to login
-      if (error) {
-        console.error('Middleware profile fetch error at /admin:', error)
-        return NextResponse.redirect(new URL('/admin/login', request.url))
-      }
-
-      // If not admin, redirect to dashboard
-      if (profile?.role !== 'admin') {
-        console.log('User is not admin, redirecting to dashboard')
-        return NextResponse.redirect(new URL('/dashboard', request.url))
-      }
-
-      // User is admin, allow access
-      console.log('Admin access granted for:', session.user.email)
-    } catch (err) {
-      console.error('Middleware error at /admin:', err)
-      return NextResponse.redirect(new URL('/admin/login', request.url))
-    }
+    console.log('Session exists, allowing access to admin')
+    return response
   }
 
   // User dashboard routes
   if (pathname.startsWith('/dashboard')) {
     if (!session) {
+      console.log('No session, redirect to login')
       return NextResponse.redirect(new URL('/login', request.url))
     }
-
-    try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single()
-
-      // If profile fetch fails, let them access dashboard anyway
-      if (error) {
-        console.error('Middleware profile fetch error at /dashboard:', error)
-        return response
-      }
-
-      // If admin, redirect to admin panel
-      if (profile?.role === 'admin') {
-        return NextResponse.redirect(new URL('/admin', request.url))
-      }
-    } catch (err) {
-      console.error('Middleware error at /dashboard:', err)
-      return response
-    }
+    return response
   }
 
   // Auth pages
   if (pathname === '/login' || pathname === '/register') {
     if (session) {
-      try {
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single()
-
-        // If profile fetch fails, redirect to dashboard
-        if (error) {
-          console.error('Middleware profile fetch error at auth page:', error)
-          return NextResponse.redirect(new URL('/dashboard', request.url))
-        }
-
-        if (profile?.role === 'admin') {
-          return NextResponse.redirect(new URL('/admin', request.url))
-        } else {
-          return NextResponse.redirect(new URL('/dashboard', request.url))
-        }
-      } catch (err) {
-        console.error('Middleware error at auth page:', err)
-        return NextResponse.redirect(new URL('/dashboard', request.url))
-      }
+      console.log('Already logged in, redirect to dashboard')
+      return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
 
