@@ -4,92 +4,136 @@ import { motion } from 'framer-motion'
 import { Mail, Lock, Wallet, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/lib/hooks/useAuth'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
   const [error, setError] = useState('')
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   })
   
-  const { user, profile, signIn, signInWithGoogle, signInWithGithub, loading: authLoading } = useAuth()
   const router = useRouter()
 
-  // Redirect if already logged in
+  // Check if user is already logged in
   useEffect(() => {
-    if (!authLoading && user) {
-      if (profile?.role === 'admin') {
-        router.push('/admin')
-      } else {
-        router.push('/dashboard')
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          // User is already logged in, redirect to dashboard
+          router.push('/dashboard')
+          return
+        }
+      } catch (error) {
+        console.error('Error checking session:', error)
+      } finally {
+        setCheckingAuth(false)
       }
     }
-  }, [authLoading, user, profile, router])
+
+    checkSession()
+  }, [supabase, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setLoading(true)
     setError('')
 
+    console.log('Attempting login with:', formData.email) // Debug log
+
     try {
-      const { error: signInError } = await signIn(formData.email, formData.password)
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email.trim(),
+        password: formData.password,
+      })
+
+      console.log('Login response:', { data, error: signInError }) // Debug log
 
       if (signInError) {
-        setError(signInError.message)
+        console.error('Sign in error:', signInError)
+        
+        // Provide user-friendly error messages
+        if (signInError.message.includes('Invalid login credentials')) {
+          setError('Invalid email or password. Please check your credentials.')
+        } else if (signInError.message.includes('Email not confirmed')) {
+          setError('Please confirm your email before logging in. Check your inbox.')
+        } else {
+          setError(signInError.message)
+        }
+        setLoading(false)
         return
       }
-      
-      // The redirect will happen via the useEffect above
+
+      if (data.user) {
+        console.log('Login successful, redirecting...') // Debug log
+        // Redirect to dashboard on successful login
+        router.push('/dashboard')
+        router.refresh()
+      } else {
+        setError('Login failed. Please try again.')
+        setLoading(false)
+      }
     } catch (err) {
-      setError('An unexpected error occurred')
-      console.error('Login error:', err)
+      console.error('Unexpected login error:', err)
+      setError('An unexpected error occurred. Please try again.')
+      setLoading(false)
     }
   }
 
   const handleGoogleLogin = async () => {
+    setLoading(true)
     setError('')
     try {
-      const { error: googleError } = await signInWithGoogle()
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
       
       if (googleError) {
         setError(googleError.message)
+        setLoading(false)
       }
     } catch (err) {
       setError('Google login failed')
       console.error('Google login error:', err)
+      setLoading(false)
     }
   }
 
   const handleGithubLogin = async () => {
+    setLoading(true)
     setError('')
     try {
-      const { error: githubError } = await signInWithGithub()
+      const { error: githubError } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
       
       if (githubError) {
         setError(githubError.message)
+        setLoading(false)
       }
     } catch (err) {
       setError('GitHub login failed')
       console.error('GitHub login error:', err)
+      setLoading(false)
     }
   }
 
-  // Show loading while checking auth
-  if (authLoading) {
+  // Show loading state while checking authentication
+  if (checkingAuth) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
-      </div>
-    )
-  }
-
-  // If already logged in, show loading while redirecting
-  if (user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+        <div className="w-12 h-12 rounded-full border-4 border-purple-500/30 border-t-purple-500 animate-spin"></div>
       </div>
     )
   }
@@ -143,7 +187,7 @@ export default function LoginPage() {
                   className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   placeholder="you@example.com"
                   required
-                  disabled={authLoading}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -164,13 +208,13 @@ export default function LoginPage() {
                   className="w-full pl-12 pr-12 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   placeholder="••••••••"
                   required
-                  disabled={authLoading}
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-white transition-colors"
-                  disabled={authLoading}
+                  disabled={loading}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
@@ -192,10 +236,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={authLoading}
+              disabled={loading}
               className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {authLoading ? 'Signing in...' : 'Sign In'}
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
@@ -211,7 +255,7 @@ export default function LoginPage() {
           <div className="grid grid-cols-2 gap-4">
             <button 
               onClick={handleGoogleLogin}
-              disabled={authLoading}
+              disabled={loading}
               className="py-3 px-6 rounded-xl glass-effect hover:bg-white/10 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -224,7 +268,7 @@ export default function LoginPage() {
             </button>
             <button 
               onClick={handleGithubLogin}
-              disabled={authLoading}
+              disabled={loading}
               className="py-3 px-6 rounded-xl glass-effect hover:bg-white/10 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
             >
               <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -240,16 +284,6 @@ export default function LoginPage() {
               Sign up for free
             </Link>
           </p>
-        </div>
-
-        <div className="mt-6 text-center">
-          <Link
-            href="/admin/login"
-            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
-          >
-            <span>Are you an admin?</span>
-            <span className="text-purple-400">Admin Login →</span>
-          </Link>
         </div>
       </motion.div>
     </div>
