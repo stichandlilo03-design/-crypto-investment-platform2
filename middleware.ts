@@ -57,21 +57,67 @@ export async function middleware(request: NextRequest) {
   // Refresh session if expired
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Protect dashboard and admin routes
-  if (request.nextUrl.pathname.startsWith('/dashboard') || 
-      request.nextUrl.pathname.startsWith('/admin')) {
+  // Admin routes protection
+  if (request.nextUrl.pathname.startsWith('/admin')) {
+    // Allow access to admin login page
+    if (request.nextUrl.pathname === '/admin/login') {
+      if (session) {
+        // Check if admin, redirect to admin dashboard
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+
+        if (profile?.role === 'admin') {
+          return NextResponse.redirect(new URL('/admin', request.url))
+        }
+      }
+      return response
+    }
+
+    // Protect other admin routes
     if (!session) {
-      const redirectUrl = new URL('/login', request.url)
-      return NextResponse.redirect(redirectUrl)
+      // Not logged in, redirect to admin login
+      return NextResponse.redirect(new URL('/admin/login', request.url))
+    }
+
+    // Check if user is admin
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
+
+    if (profile?.role !== 'admin') {
+      // Not an admin, redirect to dashboard
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+  }
+
+  // Protect dashboard routes (regular users)
+  if (request.nextUrl.pathname.startsWith('/dashboard')) {
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', request.url))
     }
   }
 
   // Redirect logged-in users away from auth pages
-  if (request.nextUrl.pathname.startsWith('/login') || 
+  if (request.nextUrl.pathname.startsWith('/login') ||
       request.nextUrl.pathname.startsWith('/register')) {
     if (session) {
-      const redirectUrl = new URL('/dashboard', request.url)
-      return NextResponse.redirect(redirectUrl)
+      // Check if admin, redirect accordingly
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
+
+      if (profile?.role === 'admin') {
+        return NextResponse.redirect(new URL('/admin', request.url))
+      } else {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
     }
   }
 
