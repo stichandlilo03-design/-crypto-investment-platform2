@@ -1,70 +1,177 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Mail, Lock, User, Wallet, Eye, EyeOff, Phone, AlertCircle } from 'lucide-react'
+import { Mail, Lock, Wallet, Eye, EyeOff, AlertCircle, User, Phone, CheckCircle, Loader2 } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase/client'
 
 export default function RegisterPage() {
-  const { signUp, signInWithGoogle, signInWithGithub } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     phone: '',
     password: '',
-    confirmPassword: '',
-    agreeToTerms: false
+    confirmPassword: ''
   })
+  
+  const router = useRouter()
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          router.push('/dashboard')
+          return
+        }
+      } catch (error) {
+        console.error('Error checking session:', error)
+      } finally {
+        setCheckingAuth(false)
+      }
+    }
+
+    checkSession()
+  }, [router])
+
+  const validateForm = () => {
+    if (!formData.fullName.trim()) {
+      setError('Full name is required')
+      return false
+    }
+    if (!formData.email.trim()) {
+      setError('Email is required')
+      return false
+    }
+    if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      setError('Please enter a valid email')
+      return false
+    }
+    if (!formData.password) {
+      setError('Password is required')
+      return false
+    }
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return false
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match')
+      return false
+    }
+    return true
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match!')
-      return
-    }
-    
-    if (!formData.agreeToTerms) {
-      setError('Please agree to the terms and conditions')
+    setSuccess(false)
+
+    if (!validateForm()) {
       return
     }
 
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long')
-      return
-    }
-    
     setLoading(true)
 
-    // Sign up with metadata for the trigger
-    const { error: signUpError } = await signUp(
-      formData.email, 
-      formData.password,
-      {
-        full_name: formData.fullName,
-        phone: formData.phone
+    try {
+      // Sign up the user
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.fullName,
+            phone: formData.phone || null,
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
+      })
+
+      if (signUpError) {
+        console.error('Sign up error:', signUpError)
+        setError(signUpError.message)
+        setLoading(false)
+        return
       }
-    )
-    
-    if (signUpError) {
-      setError(signUpError.message)
+
+      if (!authData.user) {
+        setError('Failed to create user account')
+        setLoading(false)
+        return
+      }
+
+      // Create profile in profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: authData.user.id,
+            email: formData.email,
+            full_name: formData.fullName,
+            phone: formData.phone || null,
+            role: 'user',
+            kyc_verified: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        ])
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError)
+        // User is created but profile failed - this is recoverable
+        console.log('User created but profile insert failed. Profile will be created on first login.')
+      }
+
+      setSuccess(true)
+      
+      // If email confirmation is required
+      if (authData.session) {
+        // User is auto-logged in (email confirmation disabled)
+        setTimeout(() => {
+          router.push('/dashboard')
+          router.refresh()
+        }, 2000)
+      } else {
+        // Email confirmation required
+        setTimeout(() => {
+          router.push('/login?registered=true')
+        }, 3000)
+      }
+
+    } catch (err) {
+      console.error('Registration error:', err)
+      setError('An unexpected error occurred during registration')
       setLoading(false)
     }
-    // Success case is handled by useAuth hook (redirects to dashboard)
   }
 
   const handleGoogleSignup = async () => {
     setLoading(true)
     setError('')
-    const { error: googleError } = await signInWithGoogle()
-    if (googleError) {
-      setError(googleError.message)
+    try {
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      
+      if (googleError) {
+        setError(googleError.message)
+        setLoading(false)
+      }
+    } catch (err) {
+      setError('Google signup failed')
+      console.error('Google signup error:', err)
       setLoading(false)
     }
   }
@@ -72,11 +179,31 @@ export default function RegisterPage() {
   const handleGithubSignup = async () => {
     setLoading(true)
     setError('')
-    const { error: githubError } = await signInWithGithub()
-    if (githubError) {
-      setError(githubError.message)
+    try {
+      const { error: githubError } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      
+      if (githubError) {
+        setError(githubError.message)
+        setLoading(false)
+      }
+    } catch (err) {
+      setError('GitHub signup failed')
+      console.error('GitHub signup error:', err)
       setLoading(false)
     }
+  }
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full border-4 border-purple-500/30 border-t-purple-500 animate-spin"></div>
+      </div>
+    )
   }
 
   return (
@@ -108,6 +235,16 @@ export default function RegisterPage() {
             <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start space-x-3">
               <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-red-300">{error}</div>
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/20 flex items-start space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-green-300 font-medium">Account created successfully!</p>
+                <p className="text-sm text-green-400/80 mt-1">Redirecting to dashboard...</p>
+              </div>
             </div>
           )}
 
@@ -156,7 +293,7 @@ export default function RegisterPage() {
 
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-2">
-                Phone Number
+                Phone Number <span className="text-gray-500">(Optional)</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -169,7 +306,6 @@ export default function RegisterPage() {
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   placeholder="+1 (555) 000-0000"
-                  required
                   disabled={loading}
                 />
               </div>
@@ -191,8 +327,8 @@ export default function RegisterPage() {
                   className="w-full pl-12 pr-12 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   placeholder="••••••••"
                   required
-                  minLength={8}
                   disabled={loading}
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -221,8 +357,8 @@ export default function RegisterPage() {
                   className="w-full pl-12 pr-12 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   placeholder="••••••••"
                   required
-                  minLength={8}
                   disabled={loading}
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -235,35 +371,24 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div>
-              <label className="flex items-start">
-                <input
-                  type="checkbox"
-                  checked={formData.agreeToTerms}
-                  onChange={(e) => setFormData({ ...formData, agreeToTerms: e.target.checked })}
-                  className="w-4 h-4 mt-1 rounded border-white/10 bg-white/5 text-purple-500 focus:ring-purple-500 focus:ring-offset-0"
-                  required
-                  disabled={loading}
-                />
-                <span className="ml-2 text-sm text-gray-400">
-                  I agree to the{' '}
-                  <a href="#" className="text-purple-400 hover:text-purple-300 transition-colors">
-                    Terms of Service
-                  </a>
-                  {' '}and{' '}
-                  <a href="#" className="text-purple-400 hover:text-purple-300 transition-colors">
-                    Privacy Policy
-                  </a>
-                </span>
-              </label>
-            </div>
-
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading || success}
+              className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  Creating Account...
+                </>
+              ) : success ? (
+                <>
+                  <CheckCircle className="w-5 h-5 mr-2" />
+                  Account Created!
+                </>
+              ) : (
+                'Create Account'
+              )}
             </button>
           </form>
 
@@ -272,7 +397,7 @@ export default function RegisterPage() {
               <div className="w-full border-t border-white/10"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-transparent text-gray-400">Or sign up with</span>
+              <span className="px-4 bg-transparent text-gray-400">Or continue with</span>
             </div>
           </div>
 
