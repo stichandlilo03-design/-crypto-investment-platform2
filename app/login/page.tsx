@@ -17,7 +17,6 @@ export default function LoginPage() {
     password: ''
   })
   
-  const supabase = createClientComponentClient()
   const router = useRouter()
 
   // Check if user is already logged in
