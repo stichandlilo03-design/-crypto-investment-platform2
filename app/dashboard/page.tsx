@@ -12,9 +12,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { createSupabaseClient } from '@/lib/supabase/client'
+import { useState, useEffect, useRef, useMemo } from 'react'
 
-// Create supabase instance
-const supabase = createSupabaseClient()
 
 // Define types based on your Supabase schema
 interface UserProfile {
@@ -102,6 +101,9 @@ export default function DashboardPage() {
   const { user, profile, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
 
+  const supabase = useMemo(() => createSupabaseClient(), [])
+
+
   // REDIRECT LOGIC - CHECK IF ADMIN
   useEffect(() => {
     if (!authLoading) {
@@ -115,54 +117,48 @@ export default function DashboardPage() {
     }
   }, [authLoading, user, profile, router])
 
-  // Fetch additional user data from Supabase
-  useEffect(() => {
+   useEffect(() => {
+    if (!user) return
+
+    let isMounted = true
+    
     const fetchUserData = async () => {
-      if (!user) return
-
       try {
-        // Fetch user portfolio - Note: using user_portfolio table as defined in your SQL
-        const { data: portfolioData, error: portfolioError } = await supabase
-          .from('user_portfolio')
-          .select('*')
-          .eq('user_id', user.id)
-        
-        if (!portfolioError && portfolioData) {
-          setUserPortfolio(portfolioData)
+        // Fetch all in parallel (3x faster!)
+        const [portfolioResult, transactionsResult, notificationsResult] = await Promise.all([
+          supabase.from('user_portfolio').select('*').eq('user_id', user.id),
+          supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+          supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10)
+        ])
+
+        if (!isMounted) return
+
+        if (!portfolioResult.error && portfolioResult.data) {
+          setUserPortfolio(portfolioResult.data)
         }
 
-        // Fetch user transactions
-        const { data: transactionsData, error: transactionsError } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-        
-        if (!transactionsError && transactionsData) {
-          setTransactions(transactionsData)
+        if (!transactionsResult.error && transactionsResult.data) {
+          setTransactions(transactionsResult.data)
         }
 
-        // Fetch user notifications
-        const { data: notificationsData, error: notificationsError } = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(10)
-        
-        if (!notificationsError && notificationsData) {
-          setNotifications(notificationsData)
+        if (!notificationsResult.error && notificationsResult.data) {
+          setNotifications(notificationsResult.data)
         }
 
       } catch (error) {
         console.error('Error fetching user data:', error)
       } finally {
-        setLoading(false)
+        if (isMounted) setLoading(false)
       }
     }
 
     fetchUserData()
-  }, [user])
+
+    return () => {
+      isMounted = false
+    }
+  }, [user, supabase])
+
 
   // Fetch real crypto prices
   useEffect(() => {
