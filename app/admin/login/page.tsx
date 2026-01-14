@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, LogIn, Lock, Mail } from 'lucide-react'
 import Link from 'next/link'
@@ -13,7 +13,18 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-  const { signIn } = useAuth()
+  const { user, profile, signIn, loading: authLoading } = useAuth()
+
+  // Redirect if already logged in as admin
+  useEffect(() => {
+    if (!authLoading && user) {
+      if (profile?.role === 'admin') {
+        router.push('/admin')
+      } else {
+        router.push('/dashboard')
+      }
+    }
+  }, [authLoading, user, profile, router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,15 +36,31 @@ export default function AdminLoginPage() {
 
       if (signInError) {
         setError(signInError.message || 'Invalid credentials')
-      } else {
-        // The middleware will handle the redirect based on user role
-        router.refresh()
       }
+      // The redirect will happen via useEffect above
     } catch (err) {
       setError('Network error. Please try again.')
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  // If already logged in, show loading while redirecting
+  if (user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+      </div>
+    )
   }
 
   return (
