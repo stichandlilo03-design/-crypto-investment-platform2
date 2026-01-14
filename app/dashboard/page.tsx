@@ -102,12 +102,18 @@ export default function DashboardPage() {
   const { user, profile, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
 
-  // Redirect if not authenticated
+  // REDIRECT LOGIC - CHECK IF ADMIN
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login')
+    if (!authLoading) {
+      if (!user) {
+        // Not logged in, redirect to login
+        router.push('/login')
+      } else if (profile?.role === 'admin') {
+        // User is admin, redirect to admin dashboard
+        router.push('/admin')
+      }
     }
-  }, [authLoading, user, router])
+  }, [authLoading, user, profile, router])
 
   // Fetch additional user data from Supabase
   useEffect(() => {
@@ -443,7 +449,7 @@ export default function DashboardPage() {
     </nav>
   )
 
-  if (authLoading || loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-white animate-spin" />
@@ -451,8 +457,13 @@ export default function DashboardPage() {
     )
   }
 
-  if (!user) {
-    return null // Will redirect via useEffect
+  if (!user || profile?.role === 'admin') {
+    // Will redirect via useEffect
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-white animate-spin" />
+      </div>
+    )
   }
 
   // Extract first name from full_name
