@@ -54,14 +54,15 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // Get session
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Protect admin routes - check if user is admin
+  // ADMIN ROUTES
   if (request.nextUrl.pathname.startsWith('/admin')) {
     // Allow access to admin login page
     if (request.nextUrl.pathname === '/admin/login') {
       if (session) {
-        // Check if user is admin
+        // User is logged in, check if admin
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -69,18 +70,18 @@ export async function middleware(request: NextRequest) {
           .single()
 
         if (profile?.role === 'admin') {
-          // Admin user trying to access admin login, redirect to admin dashboard
+          // Admin user, redirect to admin dashboard
           return NextResponse.redirect(new URL('/admin', request.url))
         } else {
-          // Regular user trying to access admin login, redirect to regular dashboard
+          // Regular user, redirect to user dashboard
           return NextResponse.redirect(new URL('/dashboard', request.url))
         }
       }
-      // No session, allow access to admin login page
+      // No session, allow access to admin login
       return response
     }
 
-    // For all other admin routes, check if user is logged in AND is admin
+    // Protect other admin routes
     if (!session) {
       // Not logged in, redirect to admin login
       return NextResponse.redirect(new URL('/admin/login', request.url))
@@ -94,19 +95,19 @@ export async function middleware(request: NextRequest) {
       .single()
 
     if (profile?.role !== 'admin') {
-      // Not an admin, redirect to regular dashboard
+      // Not an admin, redirect to user dashboard
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
 
-  // Protect dashboard routes (regular users)
+  // USER DASHBOARD ROUTES
   if (request.nextUrl.pathname.startsWith('/dashboard')) {
     if (!session) {
-      // Not logged in, redirect to regular login
+      // Not logged in, redirect to login
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    // Check if user is admin trying to access regular dashboard
+    // Check if user is admin trying to access user dashboard
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -114,16 +115,16 @@ export async function middleware(request: NextRequest) {
       .single()
 
     if (profile?.role === 'admin') {
-      // Admin trying to access regular dashboard, redirect to admin dashboard
+      // Admin user, redirect to admin dashboard
       return NextResponse.redirect(new URL('/admin', request.url))
     }
   }
 
-  // Redirect logged-in users away from auth pages
-  if (request.nextUrl.pathname.startsWith('/login') ||
+  // AUTH PAGES (Login/Register)
+  if (request.nextUrl.pathname.startsWith('/login') || 
       request.nextUrl.pathname.startsWith('/register')) {
     if (session) {
-      // Check if user is admin
+      // User is logged in, check role
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -134,7 +135,7 @@ export async function middleware(request: NextRequest) {
         // Admin user, redirect to admin dashboard
         return NextResponse.redirect(new URL('/admin', request.url))
       } else {
-        // Regular user, redirect to regular dashboard
+        // Regular user, redirect to user dashboard
         return NextResponse.redirect(new URL('/dashboard', request.url))
       }
     }
