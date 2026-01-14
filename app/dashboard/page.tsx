@@ -13,8 +13,6 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import KYCVerification from '@/components/KYCVerification'
-import { Clock } from 'lucide-react' // Add Clock icon
-
 
 // Define types based on your Supabase schema
 interface UserProfile {
