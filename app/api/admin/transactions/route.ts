@@ -1,6 +1,6 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 
 async function isAdmin(supabase: any, userId: string) {
   const { data: profile } = await supabase
@@ -12,7 +12,7 @@ async function isAdmin(supabase: any, userId: string) {
   return profile?.role === 'admin'
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const cookieStore = cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
@@ -26,8 +26,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 })
     }
 
-    // Get all transactions with user profiles
-    const { data, error } = await supabase
+    const url = new URL(request.url)
+    const type = url.searchParams.get('type')
+    const status = url.searchParams.get('status') || 'pending'
+    const limit = parseInt(url.searchParams.get('limit') || '50')
+    const page = parseInt(url.searchParams.get('page') || '1')
+    const offset = (page - 1) * limit
+
+    // Build query
+    let query = supabase
       .from('transactions')
       .select(`
         *,
@@ -36,15 +43,40 @@ export async function GET() {
           full_name,
           phone
         )
-      `)
+      `, { count: 'exact' })
+
+    // Apply filters
+    if (type) {
+      query = query.eq('type', type)
+    }
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    // Apply pagination and ordering
+    query = query
       .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    const { data, error, count } = await query
 
     if (error) {
+      console.error('Error fetching transactions:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json(data)
+    return NextResponse.json({
+      success: true,
+      data,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        hasMore: (count || 0) > offset + (data?.length || 0)
+      }
+    })
   } catch (error: any) {
+    console.error('Transactions fetch error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
@@ -64,22 +96,52 @@ export async function PATCH(request: Request) {
     }
 
     const body = await request.json()
-    const { transactionId, status, notes } = body
+    const { transactionId, status, adminNotes } = body
+
+    if (!transactionId || !status) {
+      return NextResponse.json(
+        { error: 'Transaction ID and status are required' },
+        { status: 400 }
+      )
+    }
+
+    // Get transaction details before update
+    const { data: existingTransaction } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', transactionId)
+      .single()
+
+    if (!existingTransaction) {
+      return NextResponse.json(
+        { error: 'Transaction not found' },
+        { status: 404 }
+      )
+    }
 
     // Update transaction
+    const updateData: any = {
+      status,
+      admin_notes: adminNotes || null,
+      approved_by: session.user.id,
+      approved_at: new Date().toISOString()
+    }
+
     const { data, error } = await supabase
       .from('transactions')
-      .update({
-        status,
-        admin_notes: notes,
-        approved_by: session.user.id,
-        approved_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', transactionId)
-      .select()
+      .select(`
+        *,
+        profiles:user_id (
+          email,
+          full_name
+        )
+      `)
       .single()
 
     if (error) {
+      console.error('Update error:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
@@ -87,79 +149,68 @@ export async function PATCH(request: Request) {
 
     // Create notification for user
     let notificationMessage = ''
+    let notificationTitle = ''
+    
     if (status === 'approved') {
-      notificationMessage = `Your ${transaction.type} request has been approved! ${notes || ''}`
+      notificationTitle = 'Transaction Approved!'
+      notificationMessage = `Your ${transaction.type} of ${transaction.amount} ${transaction.asset} has been approved.`
+      if (adminNotes) {
+        notificationMessage += ` Notes: ${adminNotes}`
+      }
     } else if (status === 'rejected') {
-      notificationMessage = `Your ${transaction.type} request has been rejected. ${notes || ''}`
+      notificationTitle = 'Transaction Rejected'
+      notificationMessage = `Your ${transaction.type} of ${transaction.amount} ${transaction.asset} has been rejected.`
+      if (adminNotes) {
+        notificationMessage += ` Reason: ${adminNotes}`
+      }
     }
 
     await supabase.from('notifications').insert({
       user_id: transaction.user_id,
-      type: 'admin',
-      title: `Transaction ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-      message: notificationMessage
+      type: 'transaction',
+      title: notificationTitle,
+      message: notificationMessage,
+      metadata: {
+        transaction_id: transactionId,
+        transaction_type: transaction.type,
+        amount: transaction.amount,
+        asset: transaction.asset,
+        status: status
+      }
     })
 
-    // If approved deposit, update portfolio
+    // If approving a deposit, update portfolio
     if (status === 'approved' && transaction.type === 'deposit') {
-      // Check if portfolio entry exists
-      const { data: existingPortfolio } = await supabase
-        .from('portfolios')
-        .select('*')
-        .eq('user_id', transaction.user_id)
-        .eq('asset_symbol', transaction.asset_symbol)
-        .single()
+      // Use the PostgreSQL function to process deposit
+      const { data: result, error: depositError } = await supabase.rpc(
+        'process_deposit_approval',
+        {
+          p_transaction_id: transactionId,
+          p_admin_id: session.user.id
+        }
+      )
 
-      if (existingPortfolio) {
-        // Update existing
-        const newAmount = parseFloat(existingPortfolio.amount) + parseFloat(transaction.amount)
-        const newInvested = parseFloat(existingPortfolio.total_invested) + parseFloat(transaction.total_value)
-        
-        await supabase
-          .from('portfolios')
-          .update({
-            amount: newAmount,
-            total_invested: newInvested,
-            average_buy_price: newInvested / newAmount
-          })
-          .eq('id', existingPortfolio.id)
-      } else {
-        // Create new
-        await supabase
-          .from('portfolios')
-          .insert({
-            user_id: transaction.user_id,
-            asset_symbol: transaction.asset_symbol,
-            asset_name: getCoinName(transaction.asset_symbol),
-            amount: transaction.amount,
-            total_invested: transaction.total_value,
-            average_buy_price: transaction.price_at_transaction
-          })
+      if (depositError) {
+        console.error('Deposit approval error:', depositError)
+        // Continue anyway, transaction is already approved
       }
 
-      // Send profit notification
+      // Send additional profit notification
       await supabase.from('notifications').insert({
         user_id: transaction.user_id,
-        type: 'profit',
-        title: 'Deposit Approved!',
-        message: `${transaction.amount} ${transaction.asset_symbol} has been added to your portfolio.`
+        type: 'success',
+        title: 'Deposit Successful!',
+        message: `${transaction.amount} ${transaction.asset} has been added to your portfolio.`
       })
     }
 
-    return NextResponse.json(data)
+    return NextResponse.json({
+      success: true,
+      message: `Transaction ${status} successfully`,
+      data
+    })
   } catch (error: any) {
+    console.error('Transaction update error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-}
-
-function getCoinName(symbol: string): string {
-  const names: Record<string, string> = {
-    BTC: 'Bitcoin',
-    ETH: 'Ethereum',
-    ADA: 'Cardano',
-    SOL: 'Solana',
-    USDT: 'Tether',
-    BNB: 'Binance Coin'
-  }
-  return names[symbol] || symbol
 }
