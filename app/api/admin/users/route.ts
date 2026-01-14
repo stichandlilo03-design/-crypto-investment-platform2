@@ -4,11 +4,11 @@ import { cookies } from 'next/headers'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     
     // Check if user is authenticated and is admin
     const { data: { session } } = await supabase.auth.getSession()
-
     if (!session) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     }
 
     const url = new URL(request.url)
-    const limit = parseInt(url.searchParams.get('limit') || '50')
+    const limit = parseInt(url.searchParams.get('limit') || '100')
     const page = parseInt(url.searchParams.get('page') || '1')
     const offset = (page - 1) * limit
 
@@ -43,26 +43,25 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Error fetching users:', error)
       return NextResponse.json(
-        { error: 'Failed to fetch users' },
+        { success: false, error: 'Failed to fetch users', details: error.message },
         { status: 500 }
       )
     }
 
     return NextResponse.json({
       success: true,
-      data: users,
+      data: users || [],
       pagination: {
         page,
         limit,
-        total: count || users.length,
-        hasMore: (count || 0) > offset + users.length
+        total: count || 0,
+        hasMore: (count || 0) > offset + (users?.length || 0)
       }
     })
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Users fetch error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { success: false, error: 'Internal server error', details: error.message },
       { status: 500 }
     )
   }
@@ -70,11 +69,11 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     
     // Check if user is authenticated and is admin
     const { data: { session } } = await supabase.auth.getSession()
-
     if (!session) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -95,18 +94,19 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const { userId, role, isActive } = await request.json()
+    const { userId, role, isActive, kycVerified } = await request.json()
 
     if (!userId) {
       return NextResponse.json(
-        { error: 'User ID is required' },
+        { success: false, error: 'User ID is required' },
         { status: 400 }
       )
     }
 
     const updates: any = {}
-    if (role) updates.role = role
+    if (role !== undefined) updates.role = role
     if (isActive !== undefined) updates.is_active = isActive
+    if (kycVerified !== undefined) updates.kyc_verified = kycVerified
 
     const { data: updatedUser, error } = await supabase
       .from('profiles')
@@ -118,7 +118,7 @@ export async function PUT(request: NextRequest) {
     if (error) {
       console.error('Error updating user:', error)
       return NextResponse.json(
-        { error: 'Failed to update user' },
+        { success: false, error: 'Failed to update user', details: error.message },
         { status: 500 }
       )
     }
@@ -128,11 +128,10 @@ export async function PUT(request: NextRequest) {
       message: 'User updated successfully',
       data: updatedUser
     })
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('User update error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { success: false, error: 'Internal server error', details: error.message },
       { status: 500 }
     )
   }
