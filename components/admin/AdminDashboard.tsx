@@ -10,7 +10,8 @@ import {
   Upload, Loader2, Home, CreditCard, UserCheck, RefreshCw
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter } from 'next/navigation'
 
 interface Transaction {
   id: string
@@ -47,6 +48,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [adminProfile, setAdminProfile] = useState<any>(null)
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalDeposits: 0,
@@ -65,11 +67,50 @@ export default function AdminDashboard() {
   } | null>(null)
   const [adminNotes, setAdminNotes] = useState('')
   
-  const { signOut, profile } = useAuth()
+  const supabase = createClientComponentClient()
+  const router = useRouter()
+
+  // Load admin profile once on mount
+  useEffect(() => {
+    loadAdminProfile()
+  }, [])
 
   useEffect(() => {
-    fetchDashboardData()
-  }, [selectedTab])
+    if (adminProfile) {
+      fetchDashboardData()
+    }
+  }, [selectedTab, adminProfile])
+
+  const loadAdminProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/admin/login')
+        return
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile || profile.role !== 'admin') {
+        router.push('/admin/login')
+        return
+      }
+
+      setAdminProfile(profile)
+    } catch (error) {
+      console.error('Profile load error:', error)
+      router.push('/admin/login')
+    }
+  }
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    router.push('/admin/login')
+  }
 
   const fetchDashboardData = async () => {
     try {
@@ -475,6 +516,15 @@ export default function AdminDashboard() {
     </div>
   )
 
+  // Show loading until profile loads
+  if (!adminProfile) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
       {/* Desktop Sidebar */}
@@ -522,7 +572,7 @@ export default function AdminDashboard() {
           </a>
           
           <button 
-            onClick={signOut}
+            onClick={handleSignOut}
             className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
           >
             <LogOut className="w-5 h-5" />
@@ -593,7 +643,7 @@ export default function AdminDashboard() {
                 </a>
                 
                 <button 
-                  onClick={signOut}
+                  onClick={handleSignOut}
                   className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
                 >
                   <LogOut className="w-5 h-5" />
@@ -623,7 +673,7 @@ export default function AdminDashboard() {
                  selectedTab.charAt(0).toUpperCase() + selectedTab.slice(1)}
               </h1>
               <p className="text-gray-400">
-                Welcome back, {profile?.full_name || 'Admin'}
+                Welcome back, {adminProfile?.full_name || 'Admin'}
               </p>
             </div>
           </div>
@@ -634,7 +684,7 @@ export default function AdminDashboard() {
             </button>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold">
-                {profile?.full_name?.charAt(0) || 'A'}
+                {adminProfile?.full_name?.charAt(0) || 'A'}
               </span>
             </div>
           </div>
