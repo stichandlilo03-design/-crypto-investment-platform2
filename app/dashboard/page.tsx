@@ -158,10 +158,16 @@ export default function DashboardPage() {
     }
   }, [user, supabase])
 
-  // Check KYC status and redirect to verification
-useEffect(() => {
-  if (profile && !profile.kyc_verified && profile.kyc_status !== 'pending') {
-    setSelectedTab('kyc-verification')
+ useEffect(() => {
+  if (profile && !profile.kyc_verified) {
+    // Only redirect if KYC not submitted or rejected
+    const shouldShowKYC = !profile.kyc_status || 
+                         profile.kyc_status === 'not_submitted' || 
+                         profile.kyc_status === 'rejected'
+    
+    if (shouldShowKYC) {
+      setSelectedTab('kyc-verification')
+    }
   }
 }, [profile])
 
@@ -592,8 +598,8 @@ useEffect(() => {
           )}
         </AnimatePresence>
 
-        {/* KYC Pending Banner */}
-{profile?.kyc_status === 'pending' && (
+ {/* Only show pending banner if status is actually pending AND submitted */}
+{profile?.kyc_status === 'pending' && profile?.kyc_submitted_at && (
   <motion.div
     initial={{ opacity: 0, y: -10 }}
     animate={{ opacity: 1, y: 0 }}
