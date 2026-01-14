@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, LogIn, Lock, Mail } from 'lucide-react'
 import Link from 'next/link'
+import { useAuth } from '@/lib/hooks/useAuth'
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
@@ -12,6 +13,7 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+  const { signIn } = useAuth()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,22 +21,13 @@ export default function AdminLoginPage() {
     setError('')
 
     try {
-      const response = await fetch('/api/admin/auth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      })
+      const { error: signInError } = await signIn(email, password)
 
-      const data = await response.json()
-
-      if (response.ok) {
-        // Success - redirect to admin panel
-        router.push('/admin')
-        router.refresh()
+      if (signInError) {
+        setError(signInError.message || 'Invalid credentials')
       } else {
-        setError(data.error || 'Login failed')
+        // The middleware will handle the redirect based on user role
+        router.refresh()
       }
     } catch (err) {
       setError('Network error. Please try again.')
@@ -121,10 +114,10 @@ export default function AdminLoginPage() {
 
           <div className="mt-6 pt-6 border-t border-white/10">
             <p className="text-center text-gray-400 text-sm">
-              Forgot your password?{' '}
-              <button className="text-purple-400 hover:text-purple-300">
-                Contact Super Admin
-              </button>
+              Regular user?{' '}
+              <Link href="/login" className="text-purple-400 hover:text-purple-300">
+                User Login
+              </Link>
             </p>
           </div>
         </div>
