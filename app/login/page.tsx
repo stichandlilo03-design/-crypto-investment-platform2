@@ -3,122 +3,64 @@
 import { motion } from 'framer-motion'
 import { Mail, Lock, Wallet, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
+import { useState } from 'react'
+import { useAuth } from '@/lib/hooks/useAuth'
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [checkingAuth, setCheckingAuth] = useState(true)
   const [error, setError] = useState('')
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   })
   
-  const router = useRouter()
-
-  // Check if user is already logged in
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          // User is already logged in, redirect to dashboard
-          router.push('/dashboard')
-          return
-        }
-      } catch (error) {
-        console.error('Error checking session:', error)
-      } finally {
-        setCheckingAuth(false)
-      }
-    }
-
-    checkSession()
-  }, [supabase, router])
+  const { signIn, signInWithGoogle, signInWithGithub, loading } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError('')
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-      })
+      const { error: signInError } = await signIn(formData.email, formData.password)
 
       if (signInError) {
         setError(signInError.message)
-        setLoading(false)
         return
       }
-
-      if (data.user) {
-        // Redirect to dashboard on successful login
-        router.push('/dashboard')
-        router.refresh()
-      }
+      
+      // signIn function in useAuth already handles navigation
     } catch (err) {
       setError('An unexpected error occurred')
       console.error('Login error:', err)
-      setLoading(false)
     }
   }
 
   const handleGoogleLogin = async () => {
-    setLoading(true)
     setError('')
     try {
-      const { error: googleError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
+      const { error: googleError } = await signInWithGoogle()
       
       if (googleError) {
         setError(googleError.message)
-        setLoading(false)
       }
     } catch (err) {
       setError('Google login failed')
       console.error('Google login error:', err)
-      setLoading(false)
     }
   }
 
   const handleGithubLogin = async () => {
-    setLoading(true)
     setError('')
     try {
-      const { error: githubError } = await supabase.auth.signInWithOAuth({
-        provider: 'github',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
+      const { error: githubError } = await signInWithGithub()
       
       if (githubError) {
         setError(githubError.message)
-        setLoading(false)
       }
     } catch (err) {
       setError('GitHub login failed')
       console.error('GitHub login error:', err)
-      setLoading(false)
     }
-  }
-
-  // Show loading state while checking authentication
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <div className="w-12 h-12 rounded-full border-4 border-purple-500/30 border-t-purple-500 animate-spin"></div>
-      </div>
-    )
   }
 
   return (
