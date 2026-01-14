@@ -68,7 +68,6 @@ export default function AdminDashboard() {
   const supabase = createClientComponentClient()
   const router = useRouter()
 
-  // Load admin profile once on mount - no auth checks, middleware did that
   useEffect(() => {
     loadAdminProfile()
   }, [])
@@ -108,10 +107,29 @@ export default function AdminDashboard() {
       setLoading(true)
       
       if (selectedTab === 'dashboard') {
+        // Fetch pending transactions
         const transactionsRes = await fetch('/api/admin/transactions?status=pending')
         const transactionsData = await transactionsRes.json()
         if (transactionsData.success) {
           setTransactions(transactionsData.data || [])
+        }
+      }
+
+      if (selectedTab === 'deposits') {
+        // Fetch all deposit transactions
+        const depositsRes = await fetch('/api/admin/transactions?type=deposit')
+        const depositsData = await depositsRes.json()
+        if (depositsData.success) {
+          setTransactions(depositsData.data || [])
+        }
+      }
+
+      if (selectedTab === 'withdrawals') {
+        // Fetch all withdrawal transactions
+        const withdrawalsRes = await fetch('/api/admin/transactions?type=withdrawal')
+        const withdrawalsData = await withdrawalsRes.json()
+        if (withdrawalsData.success) {
+          setTransactions(withdrawalsData.data || [])
         }
       }
       
@@ -121,6 +139,7 @@ export default function AdminDashboard() {
         if (usersData.success) setUsers(usersData.data || [])
       }
 
+      // Fetch stats
       try {
         const statsRes = await fetch('/api/admin/stats')
         const statsData = await statsRes.json()
@@ -226,6 +245,141 @@ export default function AdminDashboard() {
     }
   }
 
+  const renderTransactionsList = (title: string, icon: any, filterType?: string) => {
+    const Icon = icon
+    const filteredTransactions = filterType 
+      ? transactions.filter(t => t.type === filterType)
+      : transactions
+
+    return (
+      <div className="glass-effect rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-display font-bold text-white flex items-center">
+            <Icon className="w-6 h-6 mr-2 text-yellow-400" />
+            {title} ({filteredTransactions.length})
+          </h2>
+          <button
+            onClick={fetchDashboardData}
+            className="px-4 py-2 rounded-xl glass-effect hover:bg-white/10 transition-all flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Refresh</span>
+          </button>
+        </div>
+        
+        {loading ? (
+          <div className="text-center py-8">
+            <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto" />
+            <p className="text-gray-400 mt-2">Loading transactions...</p>
+          </div>
+        ) : filteredTransactions.length === 0 ? (
+          <div className="text-center py-8">
+            <CheckCircle className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-400">No transactions found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Status</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">User</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Amount</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Asset</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Details</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Date</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTransactions.map((transaction) => (
+                  <tr key={transaction.id} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="py-4 px-4">
+                      <span className={`px-3 py-1 rounded-full text-xs ${
+                        transaction.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                        transaction.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                        transaction.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                        'bg-blue-500/20 text-blue-400'
+                      }`}>
+                        {transaction.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div>
+                        <div className="text-white font-medium">
+                          {transaction.profiles?.full_name || 'Unknown User'}
+                        </div>
+                        <div className="text-sm text-gray-400">{transaction.profiles?.email}</div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="text-white font-bold">
+                        ${transaction.value_usd?.toLocaleString() || transaction.amount.toLocaleString()}
+                      </div>
+                      <div className="text-sm text-gray-400">{transaction.amount} {transaction.asset}</div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">
+                        {transaction.asset}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      {transaction.type === 'deposit' ? (
+                        transaction.payment_proof_url ? (
+                          <a
+                            href={transaction.payment_proof_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center space-x-1 text-purple-400 hover:text-purple-300"
+                          >
+                            <FileText className="w-4 h-4" />
+                            <span className="text-sm">View Proof</span>
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 text-sm">No proof</span>
+                        )
+                      ) : (
+                        <div className="text-gray-400 text-sm font-mono max-w-[200px] truncate">
+                          {transaction.wallet_address || 'No wallet'}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-gray-400 text-sm">
+                      {formatTimeAgo(transaction.created_at)}
+                    </td>
+                    <td className="py-4 px-4">
+                      {transaction.status === 'pending' ? (
+                        <button
+                          onClick={() => {
+                            setSelectedAction({
+                              type: transaction.type as 'deposit' | 'withdrawal',
+                              id: transaction.id,
+                              userEmail: transaction.profiles?.email || '',
+                              amount: transaction.value_usd || transaction.amount,
+                              asset: transaction.asset
+                            })
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 text-sm font-medium transition-all flex items-center space-x-1"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Review</span>
+                        </button>
+                      ) : (
+                        <span className="text-gray-500 text-sm">
+                          {transaction.status === 'approved' ? 'Approved' : 'Completed'}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const renderDashboard = () => {
     const pendingDeposits = transactions.filter(t => t.type === 'deposit')
     const pendingWithdrawals = transactions.filter(t => t.type === 'withdrawal')
@@ -270,124 +424,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="glass-effect rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-display font-bold text-white flex items-center">
-              <Clock className="w-6 h-6 mr-2 text-yellow-400" />
-              Pending Transactions ({transactions.length})
-            </h2>
-            <button
-              onClick={fetchDashboardData}
-              className="px-4 py-2 rounded-xl glass-effect hover:bg-white/10 transition-all flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>Refresh</span>
-            </button>
-          </div>
-          
-          {loading ? (
-            <div className="text-center py-8">
-              <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto" />
-              <p className="text-gray-400 mt-2">Loading transactions...</p>
-            </div>
-          ) : transactions.length === 0 ? (
-            <div className="text-center py-8">
-              <CheckCircle className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400">No pending transactions</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Type</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">User</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Amount</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Asset</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Details</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Submitted</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((transaction) => (
-                    <tr key={transaction.id} className="border-b border-white/5 hover:bg-white/5">
-                      <td className="py-4 px-4">
-                        <span className={`px-3 py-1 rounded-full text-xs ${
-                          transaction.type === 'deposit' 
-                            ? 'bg-green-500/20 text-green-400' 
-                            : 'bg-red-500/20 text-red-400'
-                        }`}>
-                          {transaction.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div>
-                          <div className="text-white font-medium">
-                            {transaction.profiles?.full_name || 'Unknown User'}
-                          </div>
-                          <div className="text-sm text-gray-400">{transaction.profiles?.email}</div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="text-white font-bold">
-                          ${transaction.value_usd?.toLocaleString() || transaction.amount.toLocaleString()}
-                        </div>
-                        <div className="text-sm text-gray-400">{transaction.amount} {transaction.asset}</div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">
-                          {transaction.asset}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4">
-                        {transaction.type === 'deposit' ? (
-                          transaction.payment_proof_url ? (
-                            <a
-                              href={transaction.payment_proof_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center space-x-1 text-purple-400 hover:text-purple-300"
-                            >
-                              <FileText className="w-4 h-4" />
-                              <span className="text-sm">View Proof</span>
-                            </a>
-                          ) : (
-                            <span className="text-gray-400 text-sm">No proof</span>
-                          )
-                        ) : (
-                          <div className="text-gray-400 text-sm font-mono max-w-[200px] truncate">
-                            {transaction.wallet_address || 'No wallet'}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-4 px-4 text-gray-400 text-sm">
-                        {formatTimeAgo(transaction.created_at)}
-                      </td>
-                      <td className="py-4 px-4">
-                        <button
-                          onClick={() => {
-                            setSelectedAction({
-                              type: transaction.type as 'deposit' | 'withdrawal',
-                              id: transaction.id,
-                              userEmail: transaction.profiles?.email || '',
-                              amount: transaction.value_usd || transaction.amount,
-                              asset: transaction.asset
-                            })
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 text-sm font-medium transition-all flex items-center space-x-1"
-                        >
-                          <Check className="w-3 h-3" />
-                          <span>Review</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        {renderTransactionsList('Pending Transactions', Clock)}
       </>
     )
   }
@@ -596,7 +633,11 @@ export default function AdminDashboard() {
             </button>
             <div>
               <h1 className="text-3xl font-bold text-white">
-                {selectedTab === 'dashboard' ? 'Admin Dashboard' : selectedTab === 'users' ? 'User Management' : selectedTab.charAt(0).toUpperCase() + selectedTab.slice(1)}
+                {selectedTab === 'dashboard' ? 'Admin Dashboard' : 
+                 selectedTab === 'users' ? 'User Management' :
+                 selectedTab === 'deposits' ? 'Deposit Management' :
+                 selectedTab === 'withdrawals' ? 'Withdrawal Management' :
+                 selectedTab.charAt(0).toUpperCase() + selectedTab.slice(1)}
               </h1>
               <p className="text-gray-400">Welcome back, {adminProfile?.full_name || 'Admin'}</p>
             </div>
@@ -613,9 +654,9 @@ export default function AdminDashboard() {
         </div>
 
         {selectedTab === 'dashboard' && renderDashboard()}
+        {selectedTab === 'deposits' && renderTransactionsList('All Deposits', Download, 'deposit')}
+        {selectedTab === 'withdrawals' && renderTransactionsList('All Withdrawals', Upload, 'withdrawal')}
         {selectedTab === 'users' && renderUsers()}
-        {selectedTab === 'deposits' && <div className="text-center py-12"><p className="text-gray-400">Deposits management coming soon...</p></div>}
-        {selectedTab === 'withdrawals' && <div className="text-center py-12"><p className="text-gray-400">Withdrawals management coming soon...</p></div>}
         {selectedTab === 'settings' && <div className="text-center py-12"><p className="text-gray-400">Settings coming soon...</p></div>}
       </main>
 
