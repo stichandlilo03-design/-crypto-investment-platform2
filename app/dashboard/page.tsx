@@ -8,7 +8,6 @@ import {
   CheckCircle, Loader2, Copy, ExternalLink, CreditCard, Building, Globe,
   Mail, Phone, MapPin, User, Shield, HelpCircle
 } from 'lucide-react'
-import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { createSupabaseClient } from '@/lib/supabase/client'
