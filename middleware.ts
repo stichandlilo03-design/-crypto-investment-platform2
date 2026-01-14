@@ -10,21 +10,34 @@ export async function middleware(req: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession()
 
-  // Auth routes that don't require authentication
-  const authRoutes = ['/login', '/register', '/auth/callback']
+  // Public routes that don't require authentication
+  const publicRoutes = ['/', '/login', '/register', '/auth/callback']
+  
+  // Protected routes that require authentication
+  const protectedRoutes = ['/dashboard', '/admin']
 
-  // If user is not signed in and the current path is not an auth route, redirect to login
-  if (!session && !authRoutes.includes(req.nextUrl.pathname)) {
+  const pathname = req.nextUrl.pathname
+
+  // Check if current path is a protected route
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
+  
+  // Check if current path is an auth route (login/register)
+  const isAuthRoute = ['/login', '/register'].includes(pathname)
+
+  // If user is NOT signed in and trying to access protected routes, redirect to login
+  if (!session && isProtectedRoute) {
     const redirectUrl = new URL('/login', req.url)
+    redirectUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(redirectUrl)
   }
 
-  // If user is signed in and trying to access auth routes, redirect to dashboard
-  if (session && authRoutes.includes(req.nextUrl.pathname)) {
+  // If user IS signed in and trying to access login/register, redirect to dashboard
+  if (session && isAuthRoute) {
     const redirectUrl = new URL('/dashboard', req.url)
     return NextResponse.redirect(redirectUrl)
   }
 
+  // Allow all other routes (including landing page)
   return res
 }
 
@@ -35,7 +48,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - api (API routes)
      */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api).*)',
   ],
 }
