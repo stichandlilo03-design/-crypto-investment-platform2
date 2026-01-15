@@ -1,71 +1,20 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next()
+  const supabase = createMiddlewareClient({ req, res })
 
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
+  // Refresh session - this is critical for cookie handling
+  await supabase.auth.getSession()
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: CookieOptions) {
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-        },
-      },
-    }
-  )
-
-  const { data: { session } } = await supabase.auth.getSession()
-
-  // SKIP MIDDLEWARE FOR ADMIN ROUTES - Let client-side handle it
-  if (pathname.startsWith('/admin')) {
-    return response
-  }
-
-  // REGULAR DASHBOARD ROUTES
-  if (pathname.startsWith('/dashboard')) {
-    if (!session) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
-    return response
-  }
-
-  // AUTH PAGES (login/register)
-  if (pathname === '/login' || pathname === '/register') {
-    if (session) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
-    }
-  }
-
-  return response
+  // IMPORTANT: Always return res to ensure cookies are set
+  return res
 }
 
 export const config = {
   matcher: [
-    '/dashboard/:path*',
-    '/admin/:path*',
-    '/login',
-    '/register',
-  ],
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ]
 }
