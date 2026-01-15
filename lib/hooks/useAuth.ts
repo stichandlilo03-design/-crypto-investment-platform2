@@ -66,6 +66,7 @@ export function useAuth() {
     }
   }
 
+  // ✅ FIXED: Don't redirect here, let the login page handle it
   async function signIn(email: string, password: string) {
     setLoading(true)
     try {
@@ -79,12 +80,8 @@ export function useAuth() {
         return { data: null, error }
       }
 
-      // Wait a bit for the session to be established
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      // Navigate to dashboard
-      router.push('/dashboard')
-      router.refresh()
+      // ✅ DON'T redirect here - the onAuthStateChange will fire
+      // and the login page will redirect when user is set
       
       setLoading(false)
       return { data, error: null }
