@@ -41,7 +41,7 @@ interface User {
   created_at: string
 }
 
-export default function AdminDashboard({ initialProfile }: { initialProfile: any }) {
+export default function AdminDashboard() {
   const [selectedTab, setSelectedTab] = useState('dashboard')
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -71,41 +71,68 @@ export default function AdminDashboard({ initialProfile }: { initialProfile: any
   const router = useRouter()
 
   useEffect(() => {
-  // Set the profile passed from parent
-  setAdminProfile(initialProfile)
-  setAuthChecking(false)
-}, [initialProfile])
+    checkAdminAuth()
+  }, [])
 
-useEffect(() => {
-  if (adminProfile && !authChecking) {
-    fetchDashboardData()
+  const checkAdminAuth = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        console.log('No session found')
+        router.push('/admin/login')
+        return
+      }
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
+
+      if (error) {
+        console.error('Profile fetch error:', error)
+        router.push('/admin/login')
+        return
+      }
+
+      if (profile?.role !== 'admin') {
+        console.log('User is not admin:', profile?.role)
+        router.push('/dashboard')
+        return
+      }
+
+      console.log('Admin authenticated:', profile.email)
+      setAdminProfile(profile)
+      setAuthChecking(false)
+      await fetchDashboardData()
+    } catch (error) {
+      console.error('Auth error:', error)
+      router.push('/admin/login')
+    }
   }
-}, [adminProfile])
 
-useEffect(() => {
-  if (adminProfile && !authChecking) {
-    fetchDashboardData()
-  }
-}, [selectedTab])
-
+  useEffect(() => {
+    if (adminProfile && !authChecking) {
+      fetchDashboardData()
+    }
+  }, [selectedTab])
 
   const handleSignOut = async () => {
-  try {
-    await supabase.auth.signOut()
-    router.push('/admin/login')
-  } catch (error) {
-    console.error('Sign out error:', error)
-    // Force redirect even on error
-    window.location.href = '/admin/login'
+    try {
+      await supabase.auth.signOut()
+      router.push('/admin/login')
+    } catch (error) {
+      console.error('Sign out error:', error)
+      window.location.href = '/admin/login'
+    }
   }
-}
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
       
       if (selectedTab === 'dashboard') {
-        // Fetch pending transactions
         const transactionsRes = await fetch('/api/admin/transactions?status=pending')
         const transactionsData = await transactionsRes.json()
         if (transactionsData.success) {
@@ -114,7 +141,6 @@ useEffect(() => {
       }
 
       if (selectedTab === 'deposits') {
-        // Fetch all deposit transactions
         const depositsRes = await fetch('/api/admin/transactions?type=deposit')
         const depositsData = await depositsRes.json()
         if (depositsData.success) {
@@ -123,7 +149,6 @@ useEffect(() => {
       }
 
       if (selectedTab === 'withdrawals') {
-        // Fetch all withdrawal transactions
         const withdrawalsRes = await fetch('/api/admin/transactions?type=withdrawal')
         const withdrawalsData = await withdrawalsRes.json()
         if (withdrawalsData.success) {
@@ -137,7 +162,6 @@ useEffect(() => {
         if (usersData.success) setUsers(usersData.data || [])
       }
 
-      // Fetch stats
       try {
         const statsRes = await fetch('/api/admin/stats')
         const statsData = await statsRes.json()
@@ -324,7 +348,7 @@ useEffect(() => {
                     <td className="py-4 px-4">
                       {transaction.type === 'deposit' ? (
                         transaction.payment_proof_url ? (
-                          <a
+                          
                             href={transaction.payment_proof_url}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -523,6 +547,17 @@ useEffect(() => {
       )}
     </div>
   )
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Checking authentication...</p>
+        </div>
+      </div>
+    )
+  }
     
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
