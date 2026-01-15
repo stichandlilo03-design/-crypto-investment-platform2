@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { Mail, Lock, Wallet, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 
@@ -16,7 +16,15 @@ export default function LoginPage() {
   })
   
   const router = useRouter()
-  const { signIn, loading } = useAuth()
+  const { user, signIn, loading } = useAuth()
+
+  // ✅ FIXED: Redirect when user is actually set by useAuth
+  useEffect(() => {
+    if (user) {
+      console.log('User is set, redirecting to dashboard')
+      router.push('/dashboard')
+    }
+  }, [user, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,8 +50,8 @@ export default function LoginPage() {
       return
     }
 
-    // signIn function in useAuth handles the redirect
-    console.log('Login successful, useAuth will redirect...')
+    // ✅ Don't redirect here - the useEffect above will handle it when user is set
+    console.log('Login successful, waiting for user state...')
   }
 
   return (
