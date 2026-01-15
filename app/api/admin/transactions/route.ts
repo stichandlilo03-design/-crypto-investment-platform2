@@ -15,7 +15,9 @@ async function isAdmin(supabase: any, userId: string) {
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient({ 
+      cookies: async () => cookieStore 
+    })
     const { data: { session } } = await supabase.auth.getSession()
     
     if (!session) {
@@ -88,7 +90,9 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: Request) {
   try {
     const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient({ 
+      cookies: async () => cookieStore 
+    })
     const { data: { session } } = await supabase.auth.getSession()
     
     if (!session) {
