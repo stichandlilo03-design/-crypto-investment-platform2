@@ -10,7 +10,6 @@ import { supabase } from '@/lib/supabase/client'
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [checkingAuth, setCheckingAuth] = useState(true)
   const [error, setError] = useState('')
   const [formData, setFormData] = useState({
     email: '',
@@ -18,26 +17,6 @@ export default function LoginPage() {
   })
   
   const router = useRouter()
-
-  // Check if user is already logged in
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          // User is already logged in, redirect to dashboard
-          router.push('/dashboard')
-          return
-        }
-      } catch (error) {
-        console.error('Error checking session:', error)
-      } finally {
-        setCheckingAuth(false)
-      }
-    }
-
-    checkSession()
-  }, [supabase, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -127,15 +106,6 @@ export default function LoginPage() {
       console.error('GitHub login error:', err)
       setLoading(false)
     }
-  }
-
-  // Show loading state while checking authentication
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <div className="w-12 h-12 rounded-full border-4 border-purple-500/30 border-t-purple-500 animate-spin"></div>
-      </div>
-    )
   }
 
   return (
