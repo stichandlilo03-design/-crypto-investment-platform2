@@ -38,41 +38,8 @@ export async function middleware(request: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  // ADMIN ROUTES PROTECTION
+  // SKIP MIDDLEWARE FOR ADMIN ROUTES - Let client-side handle it
   if (pathname.startsWith('/admin')) {
-    // Allow access to login page without authentication
-    if (pathname === '/admin/login') {
-      // If already logged in as admin, redirect to dashboard
-      if (session) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single()
-
-        if (profile?.role === 'admin') {
-          return NextResponse.redirect(new URL('/admin', request.url))
-        }
-      }
-      return response
-    }
-
-    // For all other admin routes, require authentication
-    if (!session) {
-      return NextResponse.redirect(new URL('/admin/login', request.url))
-    }
-
-    // Verify admin role
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
-    }
-
     return response
   }
 
