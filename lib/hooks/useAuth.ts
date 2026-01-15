@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)  // ✅ CORRECT! Start as loading
   const router = useRouter()
   
   // ✅ NO useMemo - use the singleton from imports
@@ -14,13 +14,13 @@ export function useAuth() {
   useEffect(() => {
     let isMounted = true
     
-    // Get initial session
-    const getInitialSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!isMounted) return
-        
-        setUser(session?.user ?? null)
+   const getInitialSession = async () => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!isMounted) return
+    
+    setUser(session?.user ?? null)
+    setLoading(false)  // ✅ ADD THIS LINE
         if (session?.user) {
           await fetchProfile(session.user.id)
         }
