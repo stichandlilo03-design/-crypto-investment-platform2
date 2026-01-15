@@ -10,9 +10,8 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { createSupabaseClient } from '@/lib/supabase/client'
-import { useState, useEffect, useRef, useMemo } from 'react'
-import KYCVerification from '@/components/KYCVerification'
+import { supabase } from '@/lib/supabase/client'  // ← CHANGED: Import singleton
+import { useState, useEffect, useRef } from 'react'  // ← CHANGED: Removed useMemo
 
 // Define types based on your Supabase schema
 interface UserProfile {
@@ -100,7 +99,10 @@ export default function DashboardPage() {
   const { user, profile, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
 
-  const supabase = useMemo(() => createSupabaseClient(), [])
+// ← DELETED: const supabase = useMemo(() => createSupabaseClient(), [])
+// Now using imported singleton instead
+
+// ✅ FIXED: Wait for auth to load, then check user
 
 // ✅ FIXED: Wait for auth to load, then check user
 useEffect(() => {
