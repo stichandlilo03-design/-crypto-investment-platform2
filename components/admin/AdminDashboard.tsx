@@ -230,8 +230,7 @@ export default function AdminDashboard() {
         .from('transactions')
         .update({
           status: 'approved',
-          admin_notes: adminNotes || null,
-          updated_at: new Date().toISOString()
+          admin_notes: adminNotes || null
         })
         .eq('id', id)
 
@@ -251,8 +250,7 @@ export default function AdminDashboard() {
               type: transaction.type,
               title: `${transaction.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Approved`,
               message: `Your ${transaction.type} of $${transaction.value_usd || transaction.amount} has been approved.`,
-              read: false,
-              created_at: new Date().toISOString()
+              read: false
             }
           ])
       }
@@ -275,8 +273,7 @@ export default function AdminDashboard() {
         .from('transactions')
         .update({
           status: 'rejected',
-          admin_notes: adminNotes || null,
-          updated_at: new Date().toISOString()
+          admin_notes: adminNotes || null
         })
         .eq('id', id)
 
@@ -296,8 +293,7 @@ export default function AdminDashboard() {
               type: transaction.type,
               title: `${transaction.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Rejected`,
               message: `Your ${transaction.type} of $${transaction.value_usd || transaction.amount} has been rejected. ${adminNotes ? 'Reason: ' + adminNotes : ''}`,
-              read: false,
-              created_at: new Date().toISOString()
+              read: false
             }
           ])
       }
@@ -316,7 +312,7 @@ export default function AdminDashboard() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ role: newRole, updated_at: new Date().toISOString() })
+        .update({ role: newRole })
         .eq('id', userId)
 
       if (error) {
