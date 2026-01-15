@@ -170,7 +170,7 @@ useEffect(() => {
     return () => {
       isMounted = false
     }
-  }, [user, supabase])
+  }, [user])  // ✅ Only user
 
   useEffect(() => {
     if (profile && !profile.kyc_verified) {
