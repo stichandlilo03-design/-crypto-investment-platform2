@@ -8,27 +8,24 @@ import {
   Home, CreditCard, UserCheck, RefreshCw, Download, Settings
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { getSupabaseClient } from '@/lib/supabase-client'
+import { supabase } from '@/lib/supabase/client'  // ✅ Use singleton
 import { useRouter } from 'next/navigation'
-import AdminNotifications from '@/components/AdminNotifications'
 
 interface Transaction {
   id: string
   user_id: string
   amount: number
   asset: string
-  type: 'deposit' | 'withdrawal' | 'buy' | 'sell'
+  type: 'deposit' | 'withdraw' | 'buy' | 'sell'
   value_usd: number
   status: 'pending' | 'approved' | 'rejected' | 'processing' | 'completed'
   payment_proof_url: string | null
   wallet_address: string | null
   admin_notes: string | null
   created_at: string
-  profiles: {
-    email: string
-    full_name: string | null
-    phone: string | null
-  }
+  user_email?: string
+  user_name?: string
+  user_phone?: string
 }
 
 interface User {
@@ -59,7 +56,7 @@ export default function AdminDashboard() {
   })
 
   const [selectedAction, setSelectedAction] = useState<{
-    type: 'deposit' | 'withdrawal'
+    type: 'deposit' | 'withdraw'
     id: string
     userEmail: string
     amount: number
@@ -67,7 +64,6 @@ export default function AdminDashboard() {
   } | null>(null)
   const [adminNotes, setAdminNotes] = useState('')
   
-  const supabase = getSupabaseClient()
   const router = useRouter()
 
   useEffect(() => {
@@ -132,51 +128,89 @@ export default function AdminDashboard() {
     try {
       setLoading(true)
       
-      // Get session token for API calls
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        console.error('No session found')
-        return
-      }
+      // ✅ FIXED: Fetch transactions without join, then get user data separately
+      let transactionsQuery = supabase
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100)
 
-      const headers = {
-        'Authorization': `Bearer ${session.access_token}`
-      }
-      
       if (selectedTab === 'dashboard') {
-        const transactionsRes = await fetch('/api/admin/transactions?status=pending', { headers })
-        const transactionsData = await transactionsRes.json()
-        if (transactionsData.success) {
-          setTransactions(transactionsData.data || [])
-        }
+        transactionsQuery = transactionsQuery.eq('status', 'pending')
+      } else if (selectedTab === 'deposits') {
+        transactionsQuery = transactionsQuery.eq('type', 'deposit')
+      } else if (selectedTab === 'withdrawals') {
+        transactionsQuery = transactionsQuery.eq('type', 'withdraw')
       }
 
-      if (selectedTab === 'deposits') {
-        const depositsRes = await fetch('/api/admin/transactions?type=deposit', { headers })
-        const depositsData = await depositsRes.json()
-        if (depositsData.success) {
-          setTransactions(depositsData.data || [])
-        }
-      }
+      const { data: transactionsData, error: transactionsError } = await transactionsQuery
 
-      if (selectedTab === 'withdrawals') {
-        const withdrawalsRes = await fetch('/api/admin/transactions?type=withdrawal', { headers })
-        const withdrawalsData = await withdrawalsRes.json()
-        if (withdrawalsData.success) {
-          setTransactions(withdrawalsData.data || [])
-        }
+      if (transactionsError) {
+        console.error('Error fetching transactions:', transactionsError)
+        setTransactions([])
+      } else if (transactionsData) {
+        // ✅ Get unique user IDs
+        const userIds = [...new Set(transactionsData.map(t => t.user_id))]
+        
+        // ✅ Fetch user profiles separately
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, email, full_name, phone')
+          .in('id', userIds)
+
+        // ✅ Merge transactions with user data
+        const enrichedTransactions = transactionsData.map(tx => {
+          const userProfile = profilesData?.find(p => p.id === tx.user_id)
+          return {
+            ...tx,
+            user_email: userProfile?.email || 'Unknown',
+            user_name: userProfile?.full_name || 'Unknown User',
+            user_phone: userProfile?.phone || null
+          }
+        })
+
+        setTransactions(enrichedTransactions)
       }
       
       if (selectedTab === 'users') {
-        const usersRes = await fetch('/api/admin/users', { headers })
-        const usersData = await usersRes.json()
-        if (usersData.success) setUsers(usersData.data || [])
+        const { data: usersData, error: usersError } = await supabase
+          .from('profiles')
+          .select('id, email, full_name, role, kyc_verified, is_active, created_at')
+          .order('created_at', { ascending: false })
+
+        if (usersError) {
+          console.error('Error fetching users:', usersError)
+          setUsers([])
+        } else {
+          setUsers(usersData || [])
+        }
       }
 
+      // ✅ Calculate stats
       try {
-        const statsRes = await fetch('/api/admin/stats', { headers })
-        const statsData = await statsRes.json()
-        if (statsData.success) setStats(statsData.data)
+        const { data: allTransactions } = await supabase
+          .from('transactions')
+          .select('*')
+
+        if (allTransactions) {
+          const deposits = allTransactions.filter(t => t.type === 'deposit' && t.status === 'approved')
+          const withdrawals = allTransactions.filter(t => t.type === 'withdraw' && t.status === 'approved')
+          const pendingDeposits = allTransactions.filter(t => t.type === 'deposit' && t.status === 'pending')
+          const pendingWithdrawals = allTransactions.filter(t => t.type === 'withdraw' && t.status === 'pending')
+
+          const { count: userCount } = await supabase
+            .from('profiles')
+            .select('*', { count: 'exact', head: true })
+
+          setStats({
+            totalUsers: userCount || 0,
+            totalDeposits: deposits.reduce((sum, t) => sum + (t.value_usd || t.amount), 0),
+            totalWithdrawals: withdrawals.reduce((sum, t) => sum + (t.value_usd || t.amount), 0),
+            totalVolume: allTransactions.reduce((sum, t) => sum + (t.value_usd || t.amount), 0),
+            pendingDeposits: pendingDeposits.length,
+            pendingWithdrawals: pendingWithdrawals.length
+          })
+        }
       } catch (statsError) {
         console.error('Stats fetch error:', statsError)
       }
@@ -192,26 +226,43 @@ export default function AdminDashboard() {
     if (!selectedAction) return
     
     try {
-      const response = await fetch('/api/admin/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id,
-          action: 'approve',
-          adminNotes: adminNotes || null
+      // ✅ Update transaction status
+      const { error: updateError } = await supabase
+        .from('transactions')
+        .update({
+          status: 'approved',
+          admin_notes: adminNotes || null,
+          updated_at: new Date().toISOString()
         })
-      })
+        .eq('id', id)
 
-      const data = await response.json()
-
-      if (data.success) {
-        alert('Transaction approved successfully')
-        setSelectedAction(null)
-        setAdminNotes('')
-        fetchDashboardData()
-      } else {
-        alert(`Error: ${data.error || 'Failed to approve transaction'}`)
+      if (updateError) {
+        console.error('Approval error:', updateError)
+        alert(`Error: ${updateError.message}`)
+        return
       }
+
+      // ✅ Create notification for user
+      const transaction = transactions.find(t => t.id === id)
+      if (transaction) {
+        await supabase
+          .from('notifications')
+          .insert([
+            {
+              user_id: transaction.user_id,
+              type: transaction.type,
+              title: `${transaction.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Approved`,
+              message: `Your ${transaction.type} of $${transaction.value_usd || transaction.amount} has been approved.`,
+              read: false,
+              created_at: new Date().toISOString()
+            }
+          ])
+      }
+
+      alert('Transaction approved successfully')
+      setSelectedAction(null)
+      setAdminNotes('')
+      fetchDashboardData()
     } catch (error) {
       console.error('Approval error:', error)
       alert('Failed to approve. Please try again.')
@@ -222,26 +273,43 @@ export default function AdminDashboard() {
     if (!selectedAction) return
     
     try {
-      const response = await fetch('/api/admin/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id,
-          action: 'reject',
-          adminNotes: adminNotes || null
+      // ✅ Update transaction status
+      const { error: updateError } = await supabase
+        .from('transactions')
+        .update({
+          status: 'rejected',
+          admin_notes: adminNotes || null,
+          updated_at: new Date().toISOString()
         })
-      })
+        .eq('id', id)
 
-      const data = await response.json()
-
-      if (data.success) {
-        alert('Transaction rejected successfully')
-        setSelectedAction(null)
-        setAdminNotes('')
-        fetchDashboardData()
-      } else {
-        alert(`Error: ${data.error || 'Failed to reject transaction'}`)
+      if (updateError) {
+        console.error('Rejection error:', updateError)
+        alert(`Error: ${updateError.message}`)
+        return
       }
+
+      // ✅ Create notification for user
+      const transaction = transactions.find(t => t.id === id)
+      if (transaction) {
+        await supabase
+          .from('notifications')
+          .insert([
+            {
+              user_id: transaction.user_id,
+              type: transaction.type,
+              title: `${transaction.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Rejected`,
+              message: `Your ${transaction.type} of $${transaction.value_usd || transaction.amount} has been rejected. ${adminNotes ? 'Reason: ' + adminNotes : ''}`,
+              read: false,
+              created_at: new Date().toISOString()
+            }
+          ])
+      }
+
+      alert('Transaction rejected successfully')
+      setSelectedAction(null)
+      setAdminNotes('')
+      fetchDashboardData()
     } catch (error) {
       console.error('Rejection error:', error)
       alert('Failed to reject. Please try again.')
@@ -250,20 +318,19 @@ export default function AdminDashboard() {
 
   const handleUpdateUserRole = async (userId: string, newRole: string) => {
     try {
-      const response = await fetch('/api/admin/users', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, role: newRole })
-      })
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole, updated_at: new Date().toISOString() })
+        .eq('id', userId)
 
-      const data = await response.json()
-
-      if (data.success) {
-        alert('User role updated successfully')
-        fetchDashboardData()
-      } else {
-        alert(`Error: ${data.error || 'Failed to update user role'}`)
+      if (error) {
+        console.error('Update error:', error)
+        alert(`Error: ${error.message}`)
+        return
       }
+
+      alert('User role updated successfully')
+      fetchDashboardData()
     } catch (error) {
       console.error('Update error:', error)
       alert('Failed to update user role.')
@@ -340,14 +407,14 @@ export default function AdminDashboard() {
                     <td className="py-4 px-4">
                       <div>
                         <div className="text-white font-medium">
-                          {transaction.profiles?.full_name || 'Unknown User'}
+                          {transaction.user_name || 'Unknown User'}
                         </div>
-                        <div className="text-sm text-gray-400">{transaction.profiles?.email}</div>
+                        <div className="text-sm text-gray-400">{transaction.user_email}</div>
                       </div>
                     </td>
                     <td className="py-4 px-4">
                       <div className="text-white font-bold">
-                        ${transaction.value_usd?.toLocaleString() || transaction.amount.toLocaleString()}
+                        ${(transaction.value_usd || transaction.amount).toLocaleString()}
                       </div>
                       <div className="text-sm text-gray-400">{transaction.amount} {transaction.asset}</div>
                     </td>
@@ -385,9 +452,9 @@ export default function AdminDashboard() {
                         <button
                           onClick={() => {
                             setSelectedAction({
-                              type: transaction.type as 'deposit' | 'withdrawal',
+                              type: transaction.type === 'deposit' ? 'deposit' : 'withdraw',
                               id: transaction.id,
-                              userEmail: transaction.profiles?.email || '',
+                              userEmail: transaction.user_email || '',
                               amount: transaction.value_usd || transaction.amount,
                               asset: transaction.asset
                             })
@@ -415,11 +482,11 @@ export default function AdminDashboard() {
 
   const renderDashboard = () => {
     const pendingDeposits = transactions.filter(t => t.type === 'deposit')
-    const pendingWithdrawals = transactions.filter(t => t.type === 'withdrawal')
+    const pendingWithdrawals = transactions.filter(t => t.type === 'withdraw')
 
     return (
       <>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="glass-effect p-6 rounded-2xl">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
@@ -435,11 +502,11 @@ export default function AdminDashboard() {
           <div className="glass-effect p-6 rounded-2xl">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
-                <CreditCard className="w-6 h-6 text-white" />
+                <Download className="w-6 h-6 text-white" />
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-white">{pendingDeposits.length}</div>
-                <div className="text-sm text-gray-400">Pending Deposits</div>
+                <div className="text-2xl font-bold text-white">${stats.totalDeposits.toLocaleString()}</div>
+                <div className="text-sm text-gray-400">Total Deposits</div>
               </div>
             </div>
           </div>
@@ -447,11 +514,23 @@ export default function AdminDashboard() {
           <div className="glass-effect p-6 rounded-2xl">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-white" />
+                <Upload className="w-6 h-6 text-white" />
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-white">{pendingWithdrawals.length}</div>
-                <div className="text-sm text-gray-400">Pending Withdrawals</div>
+                <div className="text-2xl font-bold text-white">${stats.totalWithdrawals.toLocaleString()}</div>
+                <div className="text-sm text-gray-400">Total Withdrawals</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="glass-effect p-6 rounded-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center">
+                <Clock className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-white">{pendingDeposits.length + pendingWithdrawals.length}</div>
+                <div className="text-sm text-gray-400">Pending</div>
               </div>
             </div>
           </div>
@@ -687,7 +766,6 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <AdminNotifications />
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <span className="text-white font-bold">{adminProfile?.full_name?.charAt(0) || 'A'}</span>
             </div>
@@ -696,7 +774,7 @@ export default function AdminDashboard() {
 
         {selectedTab === 'dashboard' && renderDashboard()}
         {selectedTab === 'deposits' && renderTransactionsList('All Deposits', Download, 'deposit')}
-        {selectedTab === 'withdrawals' && renderTransactionsList('All Withdrawals', Upload, 'withdrawal')}
+        {selectedTab === 'withdrawals' && renderTransactionsList('All Withdrawals', Upload, 'withdraw')}
         {selectedTab === 'users' && renderUsers()}
         {selectedTab === 'settings' && <div className="text-center py-12"><p className="text-gray-400">Settings coming soon...</p></div>}
       </main>
