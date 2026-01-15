@@ -1,30 +1,42 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse, NextRequest } from 'next/server'
 
-async function isAdmin(supabase: any, userId: string) {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .single()
-  
-  return profile?.role === 'admin'
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+async function isAdmin(userId: string) {
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single()
+    
+    return profile?.role === 'admin'
+  } catch (error) {
+    console.error('Admin check error:', error)
+    return false
+  }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ 
-      cookies: async () => cookieStore 
-    })
-    const { data: { session } } = await supabase.auth.getSession()
+    // Get session from Authorization header
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader) {
+      return NextResponse.json({ error: 'No authorization header' }, { status: 401 })
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
     
-    if (!session) {
+    if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!(await isAdmin(supabase, session.user.id))) {
+    if (!(await isAdmin(user.id))) {
       return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 })
     }
 
@@ -34,6 +46,8 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(url.searchParams.get('limit') || '50')
     const page = parseInt(url.searchParams.get('page') || '1')
     const offset = (page - 1) * limit
+
+    console.log('Fetching transactions:', { type, status, limit, page })
 
     // Build query
     let query = supabase
@@ -64,8 +78,14 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching transactions:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ 
+        success: false,
+        error: error.message,
+        data: []
+      }, { status: 500 })
     }
+
+    console.log('Transactions fetched:', data?.length || 0)
 
     return NextResponse.json({
       success: true,
@@ -89,17 +109,19 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: Request) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ 
-      cookies: async () => cookieStore 
-    })
-    const { data: { session } } = await supabase.auth.getSession()
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader) {
+      return NextResponse.json({ error: 'No authorization header' }, { status: 401 })
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
     
-    if (!session) {
+    if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!(await isAdmin(supabase, session.user.id))) {
+    if (!(await isAdmin(user.id))) {
       return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 })
     }
 
@@ -131,7 +153,7 @@ export async function PATCH(request: Request) {
     const updateData: any = {
       status,
       admin_notes: adminNotes || null,
-      approved_by: session.user.id,
+      approved_by: user.id,
       approved_at: new Date().toISOString()
     }
 
@@ -186,31 +208,6 @@ export async function PATCH(request: Request) {
         status: status
       }
     })
-
-    // If approving a deposit, update portfolio
-    if (status === 'approved' && transaction.type === 'deposit') {
-      // Use the PostgreSQL function to process deposit
-      const { data: result, error: depositError } = await supabase.rpc(
-        'process_deposit_approval',
-        {
-          p_transaction_id: transactionId,
-          p_admin_id: session.user.id
-        }
-      )
-
-      if (depositError) {
-        console.error('Deposit approval error:', depositError)
-        // Continue anyway, transaction is already approved
-      }
-
-      // Send additional profit notification
-      await supabase.from('notifications').insert({
-        user_id: transaction.user_id,
-        type: 'success',
-        title: 'Deposit Successful!',
-        message: `${transaction.amount} ${transaction.asset} has been added to your portfolio.`
-      })
-    }
 
     return NextResponse.json({
       success: true,
