@@ -48,6 +48,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [adminProfile, setAdminProfile] = useState<any>(null)
+  const [authChecking, setAuthChecking] = useState(true)
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalDeposits: 0,
@@ -70,21 +71,30 @@ export default function AdminDashboard() {
   const router = useRouter()
 
   useEffect(() => {
-    loadAdminProfile()
-  }, [])
+  loadAdminProfile()
+}, [])
 
-  useEffect(() => {
-    if (adminProfile) {
-      fetchDashboardData()
-    }
-  }, [selectedTab, adminProfile])
+useEffect(() => {
+  if (adminProfile && !authChecking) {
+    fetchDashboardData()
+  }
+}, [adminProfile])
+
+useEffect(() => {
+  if (adminProfile && !authChecking) {
+    fetchDashboardData()
+  }
+}, [selectedTab])
 
   const loadAdminProfile = async () => {
   try {
+    setAuthChecking(true)
+    
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {
-      console.error('No user found')
+      console.error('No user found in admin dashboard')
+      setAuthChecking(false)
       return
     }
 
@@ -96,6 +106,7 @@ export default function AdminDashboard() {
 
     if (error) {
       console.error('Error fetching profile:', error)
+      setAuthChecking(false)
       return
     }
 
@@ -104,6 +115,8 @@ export default function AdminDashboard() {
     }
   } catch (error) {
     console.error('Profile load error:', error)
+  } finally {
+    setAuthChecking(false)
   }
 }
 
@@ -542,6 +555,29 @@ export default function AdminDashboard() {
     </div>
   )
 
+
+  if (authChecking) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+      <div className="text-center">
+        <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
+        <p className="text-gray-400">Loading admin dashboard...</p>
+      </div>
+    </div>
+  )
+}
+
+if (!adminProfile) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+      <div className="text-center">
+        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <p className="text-gray-400">Unable to load admin profile</p>
+      </div>
+    </div>
+  )
+}
+    
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
       <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40">
