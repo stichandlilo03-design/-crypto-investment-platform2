@@ -151,64 +151,64 @@ export default function AdminDashboard() {
   }
 
   const fetchDashboardData = async () => {
-    try {
-      setLoading(true)
-      
-      // Get session token for API calls
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        console.error('No session found')
-        return
-      }
-
-      const headers = {
-        'Authorization': `Bearer ${session.access_token}`
-      }
-      
-      if (selectedTab === 'dashboard') {
-        const transactionsRes = await fetch('/api/admin/transactions?status=pending', { headers })
-        const transactionsData = await transactionsRes.json()
-        if (transactionsData.success) {
-          setTransactions(transactionsData.data || [])
-        }
-      }
-
-      if (selectedTab === 'deposits') {
-        const depositsRes = await fetch('/api/admin/transactions?type=deposit', { headers })
-        const depositsData = await depositsRes.json()
-        if (depositsData.success) {
-          setTransactions(depositsData.data || [])
-        }
-      }
-
-      if (selectedTab === 'withdrawals') {
-        const withdrawalsRes = await fetch('/api/admin/transactions?type=withdrawal', { headers })
-        const withdrawalsData = await withdrawalsRes.json()
-        if (withdrawalsData.success) {
-          setTransactions(withdrawalsData.data || [])
-        }
-      }
-      
-      if (selectedTab === 'users') {
-        const usersRes = await fetch('/api/admin/users', { headers })
-        const usersData = await usersRes.json()
-        if (usersData.success) setUsers(usersData.data || [])
-      }
-
-      try {
-        const statsRes = await fetch('/api/admin/stats', { headers })
-        const statsData = await statsRes.json()
-        if (statsData.success) setStats(statsData.data)
-      } catch (statsError) {
-        console.error('Stats fetch error:', statsError)
-      }
-
-    } catch (error) {
-      console.error('Error fetching data:', error)
-    } finally {
-      setLoading(false)
+  try {
+    setLoading(true)
+    
+    // Get session token for API calls
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      console.error('No session found')
+      return
     }
+
+    const headers = {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+    
+    if (selectedTab === 'dashboard') {
+      const transactionsRes = await fetch('/api/admin/transactions?status=pending', { headers })
+      const transactionsData = await transactionsRes.json()
+      if (transactionsData.success) {
+        setTransactions(transactionsData.data || [])
+      }
+    }
+
+    if (selectedTab === 'deposits') {
+      const depositsRes = await fetch('/api/admin/transactions?type=deposit', { headers })
+      const depositsData = await depositsRes.json()
+      if (depositsData.success) {
+        setTransactions(depositsData.data || [])
+      }
+    }
+
+    if (selectedTab === 'withdrawals') {
+      const withdrawalsRes = await fetch('/api/admin/transactions?type=withdrawal', { headers })
+      const withdrawalsData = await withdrawalsRes.json()
+      if (withdrawalsData.success) {
+        setTransactions(withdrawalsData.data || [])
+      }
+    }
+    
+    if (selectedTab === 'users') {
+      const usersRes = await fetch('/api/admin/users', { headers })
+      const usersData = await usersRes.json()
+      if (usersData.success) setUsers(usersData.data || [])
+    }
+
+    try {
+      const statsRes = await fetch('/api/admin/stats', { headers })
+      const statsData = await statsRes.json()
+      if (statsData.success) setStats(statsData.data)
+    } catch (statsError) {
+      console.error('Stats fetch error:', statsError)
+    }
+
+  } catch (error) {
+    console.error('Error fetching data:', error)
+  } finally {
+    setLoading(false)
   }
+}
 
   const handleApprove = async (id: string) => {
     if (!selectedAction) return
