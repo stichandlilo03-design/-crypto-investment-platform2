@@ -128,7 +128,7 @@ export default function AdminDashboard() {
     try {
       setLoading(true)
       
-      // ✅ FIXED: Fetch transactions without join, then get user data separately
+      // ✅ FIXED: Fetch transactions without join
       let transactionsQuery = supabase
         .from('transactions')
         .select('*')
@@ -226,7 +226,6 @@ export default function AdminDashboard() {
     if (!selectedAction) return
     
     try {
-      // ✅ Update transaction status
       const { error: updateError } = await supabase
         .from('transactions')
         .update({
@@ -242,7 +241,6 @@ export default function AdminDashboard() {
         return
       }
 
-      // ✅ Create notification for user
       const transaction = transactions.find(t => t.id === id)
       if (transaction) {
         await supabase
@@ -273,7 +271,6 @@ export default function AdminDashboard() {
     if (!selectedAction) return
     
     try {
-      // ✅ Update transaction status
       const { error: updateError } = await supabase
         .from('transactions')
         .update({
@@ -289,7 +286,6 @@ export default function AdminDashboard() {
         return
       }
 
-      // ✅ Create notification for user
       const transaction = transactions.find(t => t.id === id)
       if (transaction) {
         await supabase
