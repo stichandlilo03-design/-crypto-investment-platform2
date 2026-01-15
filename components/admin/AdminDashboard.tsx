@@ -41,7 +41,7 @@ interface User {
   created_at: string
 }
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ initialProfile }: { initialProfile: any }) {
   const [selectedTab, setSelectedTab] = useState('dashboard')
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -71,8 +71,10 @@ export default function AdminDashboard() {
   const router = useRouter()
 
   useEffect(() => {
-  loadAdminProfile()
-}, [])
+  // Set the profile passed from parent
+  setAdminProfile(initialProfile)
+  setAuthChecking(false)
+}, [initialProfile])
 
 useEffect(() => {
   if (adminProfile && !authChecking) {
@@ -86,39 +88,6 @@ useEffect(() => {
   }
 }, [selectedTab])
 
-  const loadAdminProfile = async () => {
-  try {
-    setAuthChecking(true)
-    
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      console.error('No user found in admin dashboard')
-      setAuthChecking(false)
-      return
-    }
-
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-
-    if (error) {
-      console.error('Error fetching profile:', error)
-      setAuthChecking(false)
-      return
-    }
-
-    if (profile) {
-      setAdminProfile(profile)
-    }
-  } catch (error) {
-    console.error('Profile load error:', error)
-  } finally {
-    setAuthChecking(false)
-  }
-}
 
   const handleSignOut = async () => {
   try {
@@ -554,29 +523,6 @@ useEffect(() => {
       )}
     </div>
   )
-
-
-  if (authChecking) {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-      <div className="text-center">
-        <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
-        <p className="text-gray-400">Loading admin dashboard...</p>
-      </div>
-    </div>
-  )
-}
-
-if (!adminProfile) {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-      <div className="text-center">
-        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <p className="text-gray-400">Unable to load admin profile</p>
-      </div>
-    </div>
-  )
-}
     
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
