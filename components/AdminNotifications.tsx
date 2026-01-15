@@ -8,7 +8,7 @@ import {
   Home, CreditCard, UserCheck, RefreshCw, Download, Settings
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { getSupabaseClient } from '@/lib/supabase-client'
 import { useRouter } from 'next/navigation'
 import AdminNotifications from '@/components/AdminNotifications'
 
@@ -67,7 +67,7 @@ export default function AdminDashboard() {
   } | null>(null)
   const [adminNotes, setAdminNotes] = useState('')
   
-  const supabase = createClientComponentClient()
+  const supabase = getSupabaseClient()
   const router = useRouter()
 
   useEffect(() => {
