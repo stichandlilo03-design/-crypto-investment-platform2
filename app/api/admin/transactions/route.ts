@@ -14,7 +14,7 @@ async function isAdmin(supabase: any, userId: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     const { data: { session } } = await supabase.auth.getSession()
     
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data,
+      data: data || [],
       pagination: {
         page,
         limit,
@@ -77,13 +77,17 @@ export async function GET(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Transactions fetch error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ 
+      success: false,
+      error: error.message || 'Internal server error',
+      data: []
+    }, { status: 500 })
   }
 }
 
 export async function PATCH(request: Request) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     const { data: { session } } = await supabase.auth.getSession()
     
