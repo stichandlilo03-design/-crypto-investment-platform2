@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { getSupabaseClient } from '@/lib/supabase-client'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Lock, Mail, AlertCircle, Loader2 } from 'lucide-react'
 
 export default function AdminLoginPage() {
@@ -10,8 +9,7 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const supabase = getSupabaseClient()
+  const supabase = createClientComponentClient()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,24 +17,14 @@ export default function AdminLoginPage() {
     setLoading(true)
 
     try {
-      console.log('Starting admin login...')
-
       // Sign in
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      if (authError) {
-        console.error('Auth error:', authError)
-        throw authError
-      }
-
-      if (!authData.session) {
-        throw new Error('No session created')
-      }
-
-      console.log('Auth successful, checking role...')
+      if (authError) throw authError
+      if (!authData.session) throw new Error('No session created')
 
       // Check admin role
       const { data: profile, error: profileError } = await supabase
@@ -45,36 +33,14 @@ export default function AdminLoginPage() {
         .eq('id', authData.user.id)
         .single()
 
-      if (profileError) {
-        console.error('Profile fetch error:', profileError)
-        throw profileError
-      }
+      if (profileError) throw profileError
 
-      if (!profile) {
-        console.error('No profile found')
-        setError('Profile not found. Please contact support.')
+      if (!profile || profile.role !== 'admin') {
         await supabase.auth.signOut()
-        setLoading(false)
-        return
+        throw new Error('Access denied. Admin privileges required.')
       }
 
-      if (profile.role !== 'admin') {
-        console.error('Not admin. Role:', profile.role)
-        setError('Access denied. Admin privileges required.')
-        await supabase.auth.signOut()
-        setLoading(false)
-        return
-      }
-
-      console.log('Admin verified!')
-      
-      // Store a flag in localStorage to help with the redirect
-      localStorage.setItem('admin_verified', 'true')
-      
-      // Wait for cookies to be set
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
-      // Force a full page reload to ensure middleware picks up the session
+      // Success - redirect with full page reload
       window.location.href = '/admin'
       
     } catch (err: any) {
@@ -87,7 +53,6 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl mb-4">
             <Lock className="w-8 h-8 text-white" />
@@ -96,10 +61,8 @@ export default function AdminLoginPage() {
           <p className="text-gray-400">Sign in to access the admin dashboard</p>
         </div>
 
-        {/* Login Form */}
         <div className="bg-[#1a1a2e]/50 backdrop-blur-xl rounded-2xl p-8 border border-purple-500/20">
           <form onSubmit={handleLogin} className="space-y-6">
-            {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
                 Email Address
@@ -111,7 +74,7 @@ export default function AdminLoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-[#0a0a0f]/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-3 bg-[#0a0a0f]/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                   placeholder="admin@example.com"
                   required
                   disabled={loading}
@@ -119,7 +82,6 @@ export default function AdminLoginPage() {
               </div>
             </div>
 
-            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
                 Password
@@ -131,7 +93,7 @@ export default function AdminLoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-[#0a0a0f]/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-3 bg-[#0a0a0f]/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                   placeholder="••••••••"
                   required
                   disabled={loading}
@@ -139,7 +101,6 @@ export default function AdminLoginPage() {
               </div>
             </div>
 
-            {/* Error Message */}
             {error && (
               <div className="flex items-start gap-2 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
                 <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
@@ -147,11 +108,10 @@ export default function AdminLoginPage() {
               </div>
             )}
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -165,7 +125,6 @@ export default function AdminLoginPage() {
           </form>
         </div>
 
-        {/* Footer */}
         <p className="text-center text-gray-500 text-sm mt-6">
           Protected area. Authorized access only.
         </p>
