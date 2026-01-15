@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from 'react'
-import { createSupabaseClient } from '@/lib/supabase/client'
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase/client'  // ← Import singleton directly
 import { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 
@@ -9,8 +9,7 @@ export function useAuth() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   
-  // ✅ FIXED: Create Supabase client only once using useMemo
-  const supabase = useMemo(() => createSupabaseClient(), [])
+  // ✅ NO useMemo - use the singleton from imports
 
   useEffect(() => {
     let isMounted = true
@@ -49,7 +48,7 @@ export function useAuth() {
       isMounted = false
       subscription.unsubscribe()
     }
-  }, [supabase])
+  }, []) // ✅ Empty deps - supabase is singleton
 
   async function fetchProfile(userId: string) {
     try {
@@ -66,7 +65,6 @@ export function useAuth() {
     }
   }
 
-  // ✅ FIXED: Don't redirect here, let the login page handle it
   async function signIn(email: string, password: string) {
     setLoading(true)
     try {
@@ -80,9 +78,7 @@ export function useAuth() {
         return { data: null, error }
       }
 
-      // ✅ DON'T redirect here - the onAuthStateChange will fire
-      // and the login page will redirect when user is set
-      
+      // ✅ DON'T redirect - let login page handle it
       setLoading(false)
       return { data, error: null }
     } catch (error: any) {
@@ -108,7 +104,6 @@ export function useAuth() {
         return { data: null, error }
       }
 
-      // Check if email confirmation is required
       if (data.user && !data.session) {
         setLoading(false)
         return { 
@@ -118,7 +113,6 @@ export function useAuth() {
         }
       }
 
-      // If session exists, redirect to dashboard
       if (data.session) {
         await new Promise(resolve => setTimeout(resolve, 500))
         router.push('/dashboard')
@@ -163,7 +157,6 @@ export function useAuth() {
     try {
       console.log('Signing out...')
       
-      // Sign out from Supabase
       const { error } = await supabase.auth.signOut()
       
       if (error) {
@@ -171,23 +164,19 @@ export function useAuth() {
         throw error
       }
       
-      // Clear local state immediately
       setUser(null)
       setProfile(null)
       
       console.log('Sign out successful, redirecting to home...')
       
-      // Redirect to home page
       router.push('/')
       
-      // Force a hard refresh to clear any cached data
       setTimeout(() => {
         router.refresh()
       }, 100)
       
     } catch (error) {
       console.error('Error in signOut function:', error)
-      // Even if there's an error, still try to redirect
       setUser(null)
       setProfile(null)
       router.push('/')
@@ -204,7 +193,7 @@ export function useAuth() {
     signInWithGoogle,
     signInWithGithub,
     signOut,
-    supabase // Export supabase instance so dashboard can use it
+    supabase // Export singleton
   }
 }
 
