@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { Shield, LogIn, Lock, Mail } from 'lucide-react'
 import Link from 'next/link'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { useRouter } from 'next/navigation'
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
@@ -13,7 +12,6 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const supabase = createClientComponentClient()
-  const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -72,14 +70,11 @@ export default function AdminLoginPage() {
 
       console.log('Admin verified, redirecting...')
 
-      // Force router refresh to update session
-      router.refresh()
-      
-      // Wait a bit for session to propagate
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Wait for session to fully settle
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
-      // Navigate to admin dashboard
-      router.push('/admin')
+      // Use hard redirect to ensure clean page load
+      window.location.href = '/admin'
       
     } catch (err) {
       console.error('Login error:', err)
