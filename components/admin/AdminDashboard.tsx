@@ -347,16 +347,16 @@ export default function AdminDashboard() {
                     </td>
                     <td className="py-4 px-4">
                       {transaction.type === 'deposit' ? (
-                       transaction.payment_proof_url ? (
-    
-                        href={transaction.payment_proof_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center space-x-1 text-purple-400 hover:text-purple-300"
-                        >
-                        <FileText className="w-4 h-4" />
-                        <span className="text-sm">View Proof</span>
-                       </a>
+                        transaction.payment_proof_url ? (
+                          
+                            href={transaction.payment_proof_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center space-x-1 text-purple-400 hover:text-purple-300"
+                          >
+                            <FileText className="w-4 h-4" />
+                            <span className="text-sm">View Proof</span>
+                          </a>
                         ) : (
                           <span className="text-gray-400 text-sm">No proof</span>
                         )
