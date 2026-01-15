@@ -4,11 +4,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
-  // COMPLETELY SKIP MIDDLEWARE FOR ALL ADMIN ROUTES
-  if (pathname.startsWith('/admin')) {
-    return NextResponse.next()
-  }
-
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -43,7 +38,45 @@ export async function middleware(request: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Dashboard routes
+  // ADMIN ROUTES PROTECTION
+  if (pathname.startsWith('/admin')) {
+    // Allow access to login page without authentication
+    if (pathname === '/admin/login') {
+      // If already logged in as admin, redirect to dashboard
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+
+        if (profile?.role === 'admin') {
+          return NextResponse.redirect(new URL('/admin', request.url))
+        }
+      }
+      return response
+    }
+
+    // For all other admin routes, require authentication
+    if (!session) {
+      return NextResponse.redirect(new URL('/admin/login', request.url))
+    }
+
+    // Verify admin role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
+
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+
+    return response
+  }
+
+  // REGULAR DASHBOARD ROUTES
   if (pathname.startsWith('/dashboard')) {
     if (!session) {
       return NextResponse.redirect(new URL('/login', request.url))
@@ -51,7 +84,7 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Auth pages
+  // AUTH PAGES (login/register)
   if (pathname === '/login' || pathname === '/register') {
     if (session) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
