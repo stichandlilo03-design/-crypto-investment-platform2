@@ -132,8 +132,19 @@ export default function AdminDashboard() {
     try {
       setLoading(true)
       
+      // Get session token for API calls
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        console.error('No session found')
+        return
+      }
+
+      const headers = {
+        'Authorization': `Bearer ${session.access_token}`
+      }
+      
       if (selectedTab === 'dashboard') {
-        const transactionsRes = await fetch('/api/admin/transactions?status=pending')
+        const transactionsRes = await fetch('/api/admin/transactions?status=pending', { headers })
         const transactionsData = await transactionsRes.json()
         if (transactionsData.success) {
           setTransactions(transactionsData.data || [])
@@ -141,7 +152,7 @@ export default function AdminDashboard() {
       }
 
       if (selectedTab === 'deposits') {
-        const depositsRes = await fetch('/api/admin/transactions?type=deposit')
+        const depositsRes = await fetch('/api/admin/transactions?type=deposit', { headers })
         const depositsData = await depositsRes.json()
         if (depositsData.success) {
           setTransactions(depositsData.data || [])
@@ -149,7 +160,7 @@ export default function AdminDashboard() {
       }
 
       if (selectedTab === 'withdrawals') {
-        const withdrawalsRes = await fetch('/api/admin/transactions?type=withdrawal')
+        const withdrawalsRes = await fetch('/api/admin/transactions?type=withdrawal', { headers })
         const withdrawalsData = await withdrawalsRes.json()
         if (withdrawalsData.success) {
           setTransactions(withdrawalsData.data || [])
@@ -157,13 +168,13 @@ export default function AdminDashboard() {
       }
       
       if (selectedTab === 'users') {
-        const usersRes = await fetch('/api/admin/users')
+        const usersRes = await fetch('/api/admin/users', { headers })
         const usersData = await usersRes.json()
         if (usersData.success) setUsers(usersData.data || [])
       }
 
       try {
-        const statsRes = await fetch('/api/admin/stats')
+        const statsRes = await fetch('/api/admin/stats', { headers })
         const statsData = await statsRes.json()
         if (statsData.success) setStats(statsData.data)
       } catch (statsError) {
