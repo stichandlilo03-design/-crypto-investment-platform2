@@ -102,28 +102,31 @@ export default function DashboardPage() {
 
   const supabase = useMemo(() => createSupabaseClient(), [])
 
-  // ✅ FIXED: Simpler redirect logic
-  useEffect(() => {
-    // Wait for auth to finish loading
-    if (authLoading) return
+// ✅ FIXED: Wait for auth to load, then check user
+useEffect(() => {
+  // CRITICAL: Don't do ANYTHING while loading
+  if (authLoading) {
+    console.log('Auth still loading, waiting...')
+    return  // ← This is KEY! Exit early while loading
+  }
 
-    // If no user after loading, redirect to login
-    if (!user) {
-      console.log('No user found, redirecting to login')
-      router.push('/login')
-      return
-    }
+  // Now auth is loaded, check if user exists
+  if (!user) {
+    console.log('No user found after auth loaded, redirecting to login')
+    router.push('/login')
+    return
+  }
 
-    // If user is admin, redirect to admin dashboard
-    if (profile?.role === 'admin') {
-      console.log('Admin user detected, redirecting to admin dashboard')
-      router.push('/admin')
-      return
-    }
+  // User exists, check if admin
+  if (profile?.role === 'admin') {
+    console.log('Admin user, redirecting to admin dashboard')
+    router.push('/admin')
+    return
+  }
 
-    // User is logged in and not admin - stay on dashboard
-    console.log('User authenticated:', user.email)
-  }, [authLoading, user, profile, router])
+  // All good, user is authenticated and not admin
+  console.log('User authenticated:', user.email, 'Role:', profile?.role)
+}, [authLoading, user, profile?.role, router])
 
   useEffect(() => {
     if (!user) return
