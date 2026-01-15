@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase/client'  // ✅ Use singleton
 import { useRouter } from 'next/navigation'
 import AdminDashboard from '@/components/admin/AdminDashboard'
 import { Loader2 } from 'lucide-react'
@@ -9,13 +9,12 @@ import { Loader2 } from 'lucide-react'
 export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
-  const supabase = createClientComponentClient()
   const router = useRouter()
-
+  
   useEffect(() => {
     checkAuth()
   }, [])
-
+  
   const checkAuth = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -24,13 +23,13 @@ export default function AdminPage() {
         router.replace('/admin/login')
         return
       }
-
+      
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', session.user.id)
         .single()
-
+      
       if (profile?.role === 'admin') {
         setIsAdmin(true)
         setLoading(false)
@@ -42,7 +41,7 @@ export default function AdminPage() {
       router.replace('/admin/login')
     }
   }
-
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
@@ -50,10 +49,10 @@ export default function AdminPage() {
       </div>
     )
   }
-
+  
   if (!isAdmin) {
     return null
   }
-
+  
   return <AdminDashboard />
 }
