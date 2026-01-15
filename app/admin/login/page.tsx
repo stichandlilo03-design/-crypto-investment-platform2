@@ -1,60 +1,58 @@
 'use client'
 
-import { motion } from 'framer-motion'
 import { useState } from 'react'
-import { Shield, LogIn, Lock, Mail } from 'lucide-react'
-import Link from 'next/link'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter } from 'next/navigation'
+import { getSupabaseClient } from '@/lib/supabase-client'
+import { Lock, Mail, AlertCircle, Loader2 } from 'lucide-react'
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const supabase = createClientComponentClient()
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+  const supabase = getSupabaseClient()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError('')
+    setLoading(true)
 
     try {
-      console.log('Starting login process...')
-      
+      console.log('Starting admin login...')
+
       // Sign in
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      if (signInError) {
-        console.error('Sign in error:', signInError)
-        setError(signInError.message || 'Invalid credentials')
-        setLoading(false)
-        return
+      if (authError) {
+        console.error('Auth error:', authError)
+        throw authError
       }
 
-      if (!data.user) {
-        console.error('No user data returned')
-        setError('Login failed')
-        setLoading(false)
-        return
+      if (!authData.session) {
+        throw new Error('No session created')
       }
 
-      console.log('User signed in:', data.user.email)
+      console.log('Auth successful, checking role...')
 
-      // Verify admin role
+      // Check admin role
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', data.user.id)
+        .eq('id', authData.user.id)
         .single()
 
-      console.log('Profile check:', profile, profileError)
+      if (profileError) {
+        console.error('Profile fetch error:', profileError)
+        throw profileError
+      }
 
-      if (profileError || !profile) {
-        console.error('Profile error:', profileError)
-        setError('Failed to verify account')
+      if (!profile) {
+        console.error('No profile found')
+        setError('Profile not found. Please contact support.')
         await supabase.auth.signOut()
         setLoading(false)
         return
@@ -68,49 +66,52 @@ export default function AdminLoginPage() {
         return
       }
 
-      console.log('Admin verified, redirecting...')
+      console.log('Admin verified!')
+      
+      // Store a flag in localStorage to help with the redirect
+      localStorage.setItem('admin_verified', 'true')
+      
+      // Wait for cookies to be set
+      await new Promise(resolve => setTimeout(resolve, 1500))
 
-      // Wait for session to fully settle
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      // Use hard redirect to ensure clean page load
+      // Force a full page reload to ensure middleware picks up the session
       window.location.href = '/admin'
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err)
-      setError('Login failed. Please try again.')
+      setError(err.message || 'Login failed. Please try again.')
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
-      >
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mx-auto mb-4">
-            <Shield className="w-10 h-10 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl mb-4">
+            <Lock className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Admin Portal</h1>
-          <p className="text-gray-400">CryptoVault Administration</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Admin Access</h1>
+          <p className="text-gray-400">Sign in to access the admin dashboard</p>
         </div>
 
-        <div className="glass-effect rounded-2xl p-8">
+        {/* Login Form */}
+        <div className="bg-[#1a1a2e]/50 backdrop-blur-xl rounded-2xl p-8 border border-purple-500/20">
           <form onSubmit={handleLogin} className="space-y-6">
+            {/* Email Field */}
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                Admin Email
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+                Email Address
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
+                  id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                  className="w-full pl-10 pr-4 py-3 bg-[#0a0a0f]/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
                   placeholder="admin@example.com"
                   required
                   disabled={loading}
@@ -118,17 +119,19 @@ export default function AdminLoginPage() {
               </div>
             </div>
 
+            {/* Password Field */}
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
                 Password
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
+                  id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                  className="w-full pl-10 pr-4 py-3 bg-[#0a0a0f]/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
                   placeholder="••••••••"
                   required
                   disabled={loading}
@@ -136,50 +139,37 @@ export default function AdminLoginPage() {
               </div>
             </div>
 
+            {/* Error Message */}
             {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-                <p className="text-red-400 text-sm text-center">{error}</p>
+              <div className="flex items-start gap-2 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-400">{error}</p>
               </div>
             )}
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Verifying Access...</span>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Signing in...
                 </>
               ) : (
-                <>
-                  <LogIn className="w-5 h-5" />
-                  <span>Access Admin Panel</span>
-                </>
+                'Sign In'
               )}
             </button>
           </form>
-
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <p className="text-center text-gray-400 text-sm">
-              Regular user?{' '}
-              <Link href="/login" className="text-purple-400 hover:text-purple-300">
-                User Login
-              </Link>
-            </p>
-          </div>
         </div>
 
-        <div className="mt-6 text-center">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
-          >
-            ← Back to main site
-          </Link>
-        </div>
-      </motion.div>
+        {/* Footer */}
+        <p className="text-center text-gray-500 text-sm mt-6">
+          Protected area. Authorized access only.
+        </p>
+      </div>
     </div>
   )
 }
