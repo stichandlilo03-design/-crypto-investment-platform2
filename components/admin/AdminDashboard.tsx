@@ -1476,9 +1476,9 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
                 </>
               )}
             </>
-          )}
-        </button>
-      </div>
+            )}
+              </button>
+             </div>
             </motion.div>
           </div>
         )}
