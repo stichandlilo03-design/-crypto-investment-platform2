@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { ArrowDownCircle, Loader2, DollarSign, Bitcoin, AlertCircle, TrendingUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
-import { getCryptoPrices } from '@/lib/api/coingecko'
 import { motion } from 'framer-motion'
 
 export default function Deposit() {
@@ -29,18 +28,21 @@ export default function Deposit() {
 
   const fetchPrices = async () => {
     try {
-      const prices = await getCryptoPrices(['BTC', 'ETH', 'USDT', 'SOL', 'ADA', 'BNB', 'XRP', 'DOGE'])
+      // ✅ Use server-side API route to avoid CORS/rate limit
+      const response = await fetch('/api/crypto-prices?symbols=BTC,ETH,USDT,SOL,ADA,BNB,XRP,DOGE')
+      const data = await response.json()
       
-      const pricesWithUSD = {
-        ...prices,
-        USD: { price: 1, change24h: 0 }
+      if (data.success) {
+        console.log('✅ Fetched prices:', data.prices)
+        setCryptoPrices(data.prices)
+      } else {
+        throw new Error(data.error)
       }
       
-      console.log('✅ Fetched prices:', pricesWithUSD)
-      setCryptoPrices(pricesWithUSD)
       setPricesLoading(false)
     } catch (error) {
       console.error('Error fetching prices:', error)
+      // Fallback prices
       setCryptoPrices({
         BTC: { price: 42000, change24h: 0 },
         ETH: { price: 3300, change24h: 0 },
@@ -123,6 +125,12 @@ export default function Deposit() {
     const usd = parseFloat(usdAmount)
     const crypto = parseFloat(cryptoAmount)
 
+    console.log('🔍 FORM SUBMISSION:', {
+      usdAmount: usd,
+      cryptoAmount: crypto,
+      asset: selectedAsset
+    })
+
     // ✅ CRITICAL VALIDATION
     if (!usd || usd <= 0) {
       alert('❌ Please enter a valid USD amount')
@@ -139,7 +147,7 @@ export default function Deposit() {
       return
     }
 
-    // ✅ VALIDATE CONVERSION IS CORRECT
+    // ✅ VALIDATE CONVERSION
     const priceData = cryptoPrices[selectedAsset]
     const currentPrice = priceData?.price || 1
     const expectedCrypto = usd / currentPrice
@@ -152,7 +160,6 @@ export default function Deposit() {
       difference: Math.abs(crypto - expectedCrypto)
     })
 
-    // Allow small rounding differences
     if (Math.abs(crypto - expectedCrypto) > 0.00000001 && selectedAsset !== 'USD') {
       alert('⚠️ Conversion error detected. Please refresh the page and try again.')
       return
@@ -172,21 +179,21 @@ export default function Deposit() {
         user_id: user.id,
         type: 'deposit',
         asset: selectedAsset,
-        amount: crypto,  // ✅ THIS IS THE CRYPTO AMOUNT
-        value_usd: usd,  // ✅ THIS IS THE USD AMOUNT
+        amount: crypto,  // ✅ CRYPTO AMOUNT
+        value_usd: usd,  // ✅ USD AMOUNT
         status: 'pending',
         currentPrice
       })
 
-      // ✅ CREATE TRANSACTION WITH CORRECT VALUES
+      // ✅ INSERT TRANSACTION
       const { data: txData, error: txError } = await supabase
         .from('transactions')
         .insert({
           user_id: user.id,
           type: 'deposit',
           asset: selectedAsset,
-          amount: crypto,      // ✅ Crypto amount (e.g., 0.00238 BTC)
-          value_usd: usd,      // ✅ USD amount (e.g., $100)
+          amount: crypto,      // ✅ Crypto (0.00238 BTC)
+          value_usd: usd,      // ✅ USD ($100)
           status: 'pending',
           payment_method: paymentMethod,
           payment_proof_url: proofUrl
@@ -194,11 +201,14 @@ export default function Deposit() {
         .select()
         .single()
 
-      if (txError) throw txError
+      if (txError) {
+        console.error('❌ INSERT ERROR:', txError)
+        throw txError
+      }
 
-      console.log('✅ TRANSACTION CREATED:', txData)
+      console.log('✅ TRANSACTION CREATED IN DB:', txData)
 
-      // Send notification
+      // Notification
       await supabase
         .from('notifications')
         .insert({
@@ -209,20 +219,18 @@ export default function Deposit() {
           read: false
         })
 
-      alert(`✅ Deposit submitted successfully!
+      alert(`✅ Deposit submitted!
 
-💵 USD Amount: $${usd.toFixed(2)}
-${selectedAsset === 'USD' ? '💵' : '₿'} ${selectedAsset} Amount: ${crypto.toFixed(8)} ${selectedAsset}
-📊 Current Price: $${currentPrice.toLocaleString()}
+💵 USD: $${usd.toFixed(2)}
+₿ ${selectedAsset}: ${crypto.toFixed(8)}
+📊 Price: $${currentPrice.toLocaleString()}
 
-⏳ Please wait for admin approval.`)
+⏳ Waiting for admin approval.`)
       
-      // Reset form
       setUsdAmount('')
       setCryptoAmount('0.00000000')
       setPaymentProof(null)
       
-      // Reload to show pending transaction
       setTimeout(() => window.location.reload(), 1000)
       
     } catch (error: any) {
@@ -254,8 +262,8 @@ ${selectedAsset === 'USD' ? '💵' : '₿'} ${selectedAsset} Amount: ${crypto.to
         {!pricesLoading && (
           <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs">
             <p className="text-blue-400 font-mono">
-              🔍 Current {selectedAsset} Price: ${currentPrice.toLocaleString()} | 
-              Conversion: ${usdAmount || '0'} ÷ ${currentPrice.toLocaleString()} = {cryptoAmount} {selectedAsset}
+              🔍 {selectedAsset} Price: ${currentPrice.toLocaleString()} | 
+              ${usdAmount || '0'} ÷ ${currentPrice.toLocaleString()} = {cryptoAmount} {selectedAsset}
             </p>
           </div>
         )}
@@ -291,7 +299,6 @@ ${selectedAsset === 'USD' ? '💵' : '₿'} ${selectedAsset} Amount: ${crypto.to
               })}
             </div>
             
-            {/* Live Price Display */}
             {!pricesLoading && selectedAsset !== 'USD' && (
               <div className="mt-3 p-3 rounded-lg bg-white/5 border border-white/10">
                 <div className="flex items-center justify-between">
@@ -310,10 +317,10 @@ ${selectedAsset === 'USD' ? '💵' : '₿'} ${selectedAsset} Amount: ${crypto.to
             )}
           </div>
 
-          {/* USD Amount Input */}
+          {/* USD Input */}
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">
-              USD Amount (How much you're depositing)
+              USD Amount
             </label>
             <div className="relative">
               <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -324,13 +331,13 @@ ${selectedAsset === 'USD' ? '💵' : '₿'} ${selectedAsset} Amount: ${crypto.to
                 placeholder="0.00"
                 min="1"
                 step="0.01"
-                className="w-full pl-12 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 text-white text-lg font-bold focus:outline-none focus:border-purple-500 transition-all"
+                className="w-full pl-12 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 text-white text-lg font-bold focus:outline-none focus:border-purple-500"
                 required
               />
             </div>
           </div>
 
-          {/* Crypto Amount Display */}
+          {/* Crypto Display */}
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">
               You Will Receive
@@ -341,18 +348,15 @@ ${selectedAsset === 'USD' ? '💵' : '₿'} ${selectedAsset} Amount: ${crypto.to
                 type="text"
                 value={cryptoAmount}
                 readOnly
-                className="w-full pl-12 pr-20 py-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-lg font-bold cursor-not-allowed"
+                className="w-full pl-12 pr-20 py-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-lg font-bold"
               />
               <span className="absolute right-4 top-1/2 transform -translate-y-1/2 text-purple-400 font-bold">
                 {selectedAsset}
               </span>
             </div>
-            <p className="text-gray-400 text-xs mt-2">
-              Calculated at current market price
-            </p>
           </div>
 
-          {/* Conversion Summary */}
+          {/* Summary */}
           {parseFloat(usdAmount) > 0 && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -360,20 +364,20 @@ ${selectedAsset === 'USD' ? '💵' : '₿'} ${selectedAsset} Amount: ${crypto.to
               className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20"
             >
               <div className="flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0" />
                 <div className="flex-1">
-                  <p className="text-blue-400 font-medium text-sm mb-2">Deposit Summary:</p>
+                  <p className="text-blue-400 font-medium text-sm mb-2">Summary:</p>
                   <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-400">USD Depositing:</span>
+                      <span className="text-gray-400">USD:</span>
                       <span className="text-white font-bold">${parseFloat(usdAmount).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">{selectedAsset} Receiving:</span>
-                      <span className="text-white font-bold">{cryptoAmount} {selectedAsset}</span>
+                      <span className="text-gray-400">{selectedAsset}:</span>
+                      <span className="text-white font-bold">{cryptoAmount}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Price Per {selectedAsset}:</span>
+                      <span className="text-gray-400">Price:</span>
                       <span className="text-white">${currentPrice.toLocaleString()}</span>
                     </div>
                   </div>
@@ -384,9 +388,7 @@ ${selectedAsset === 'USD' ? '💵' : '₿'} ${selectedAsset} Amount: ${crypto.to
 
           {/* Payment Method */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Payment Method
-            </label>
+            <label className="block text-sm font-medium text-gray-400 mb-2">Payment Method</label>
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
@@ -400,30 +402,26 @@ ${selectedAsset === 'USD' ? '💵' : '₿'} ${selectedAsset} Amount: ${crypto.to
             </select>
           </div>
 
-          {/* Payment Proof Upload */}
+          {/* Payment Proof */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Payment Proof
-            </label>
+            <label className="block text-sm font-medium text-gray-400 mb-2">Payment Proof</label>
             <input
               type="file"
               accept="image/*,.pdf"
               onChange={handleFileUpload}
-              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-500 file:text-white file:cursor-pointer hover:file:bg-purple-600"
+              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-500 file:text-white file:cursor-pointer"
               required
             />
             {paymentProof && (
-              <p className="text-green-400 text-sm mt-2">
-                ✓ {paymentProof.name} uploaded
-              </p>
+              <p className="text-green-400 text-sm mt-2">✓ {paymentProof.name}</p>
             )}
           </div>
 
-          {/* Submit Button */}
+          {/* Submit */}
           <button
             type="submit"
-            disabled={loading || uploadingProof || !paymentProof || !usdAmount || parseFloat(cryptoAmount) <= 0}
-            className="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            disabled={loading || uploadingProof || !paymentProof || !usdAmount}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center space-x-2"
           >
             {loading || uploadingProof ? (
               <>
@@ -438,17 +436,6 @@ ${selectedAsset === 'USD' ? '💵' : '₿'} ${selectedAsset} Amount: ${crypto.to
             )}
           </button>
         </form>
-
-        {/* Important Notes */}
-        <div className="mt-6 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-          <p className="text-yellow-400 text-sm font-medium mb-2">📝 How it works:</p>
-          <ul className="text-gray-400 text-xs space-y-1">
-            <li>• Enter USD amount you're depositing</li>
-            <li>• System calculates crypto at current market price</li>
-            <li>• Admin approves deposit (1-24 hours)</li>
-            <li>• You receive exact crypto amount shown</li>
-          </ul>
-        </div>
       </div>
     </div>
   )
