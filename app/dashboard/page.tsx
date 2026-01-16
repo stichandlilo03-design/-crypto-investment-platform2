@@ -59,7 +59,6 @@ export default function DashboardPage() {
   // Data State
   const [cryptoPrices, setCryptoPrices] = useState<CryptoPrices>({})
   const [loading, setLoading] = useState(true)
-  const [userPortfolio, setUserPortfolio] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
   const [userBalances, setUserBalances] = useState<UserBalance[]>([])
@@ -92,24 +91,17 @@ export default function DashboardPage() {
 
   // ✅ Auth Check
   useEffect(() => {
-    if (authLoading) {
-      console.log('Auth still loading, waiting...')
-      return
-    }
+    if (authLoading) return
 
     if (!user) {
-      console.log('No user found after auth loaded, redirecting to login')
       router.push('/login')
       return
     }
 
     if (profile?.role === 'admin') {
-      console.log('Admin user, redirecting to admin dashboard')
       router.push('/admin')
       return
     }
-
-    console.log('User authenticated:', user.email, 'Role:', profile?.role)
   }, [authLoading, user, profile?.role, router])
 
   // ✅ Fetch User Data
@@ -120,18 +112,13 @@ export default function DashboardPage() {
     
     const fetchUserData = async () => {
       try {
-        const [portfolioResult, transactionsResult, notificationsResult, balancesResult] = await Promise.all([
-          supabase.from('user_portfolio').select('*').eq('user_id', user.id),
+        const [transactionsResult, notificationsResult, balancesResult] = await Promise.all([
           supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
           supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
           supabase.from('user_balances').select('*').eq('user_id', user.id)
         ])
 
         if (!isMounted) return
-
-        if (!portfolioResult.error && portfolioResult.data) {
-          setUserPortfolio(portfolioResult.data)
-        }
 
         if (!transactionsResult.error && transactionsResult.data) {
           setTransactions(transactionsResult.data)
@@ -178,13 +165,16 @@ export default function DashboardPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // Calculate Total Balance
+  // ✅ Calculate Total Balance from user_balances
   const calculateTotalBalance = () => {
-    if (!userPortfolio.length) return 0
+    if (!userBalances.length) return 0
     
-    return userPortfolio.reduce((total, item) => {
-      const assetPrice = cryptoPrices[item.asset.toLowerCase()]?.usd || 0
-      return total + (Number(item.amount) * assetPrice)
+    return userBalances.reduce((total, balance) => {
+      const assetPrice = balance.asset === 'USD' 
+        ? 1 
+        : (cryptoPrices[balance.asset.toLowerCase()]?.usd || 0)
+      
+      return total + (Number(balance.amount) * assetPrice)
     }, 0)
   }
 
@@ -293,7 +283,6 @@ export default function DashboardPage() {
       setPaymentProofFile(null)
       setPaymentProofPreview(null)
       
-      // Refresh transactions
       const { data } = await supabase
         .from('transactions')
         .select('*')
@@ -361,7 +350,6 @@ export default function DashboardPage() {
       setWithdrawAsset('USD')
       setWithdrawAddress('')
       
-      // Refresh transactions
       const { data } = await supabase
         .from('transactions')
         .select('*')
@@ -478,17 +466,7 @@ export default function DashboardPage() {
     )
   }
 
-  // No User State
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-white animate-spin" />
-      </div>
-    )
-  }
-
-  // Admin Redirect State
-  if (profile?.role === 'admin') {
+  if (!user || profile?.role === 'admin') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-white animate-spin" />
@@ -725,7 +703,7 @@ export default function DashboardPage() {
                 <div className="glass-effect rounded-2xl p-6 border border-white/10">
                   <h2 className="text-xl font-bold text-white mb-6">Portfolio</h2>
                   
-                  {userPortfolio.length === 0 ? (
+                  {userBalances.length === 0 ? (
                     <div className="text-center py-12">
                       <PieChart className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                       <p className="text-gray-400">No assets yet</p>
@@ -738,29 +716,31 @@ export default function DashboardPage() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {userPortfolio.map(item => {
-                        const price = cryptoPrices[item.asset.toLowerCase()]?.usd || 0
-                        const value = Number(item.amount) * price
-                        const change = cryptoPrices[item.asset.toLowerCase()]?.usd_24h_change || 0
+                      {userBalances.map(balance => {
+                        const price = balance.asset === 'USD' ? 1 : (cryptoPrices[balance.asset.toLowerCase()]?.usd || 0)
+                        const value = Number(balance.amount) * price
+                        const change = balance.asset === 'USD' ? 0 : (cryptoPrices[balance.asset.toLowerCase()]?.usd_24h_change || 0)
                         
                         return (
-                          <div key={item.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5">
+                          <div key={balance.asset} className="flex items-center justify-between p-4 rounded-xl bg-white/5">
                             <div className="flex items-center space-x-3">
                               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">{item.asset}</span>
+                                <span className="text-white font-bold text-sm">{balance.asset}</span>
                               </div>
                               <div>
-                                <p className="font-medium text-white">{item.asset}</p>
-                                <p className="text-gray-400 text-sm">{Number(item.amount).toFixed(8)}</p>
+                                <p className="font-medium text-white">{balance.asset}</p>
+                                <p className="text-gray-400 text-sm">{Number(balance.amount).toFixed(8)}</p>
                               </div>
                             </div>
                             <div className="text-right">
                               <p className="font-medium text-white">
                                 {hideBalance ? '••••••' : formatCurrency(value)}
                               </p>
-                              <p className={`text-sm ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {change >= 0 ? '+' : ''}{change.toFixed(2)}%
-                              </p>
+                              {balance.asset !== 'USD' && (
+                                <p className={`text-sm ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+                                </p>
+                              )}
                             </div>
                           </div>
                         )
@@ -1111,15 +1091,18 @@ export default function DashboardPage() {
                     {userBalances.length === 0 ? (
                       <p className="text-gray-400 col-span-full text-center py-4">No balances available</p>
                     ) : (
-                      userBalances.map((balance) => (
-                        <div key={balance.asset} className="p-4 rounded-xl bg-white/5 border border-white/10">
-                          <p className="text-gray-400 text-sm mb-1">{balance.asset}</p>
-                          <p className="text-white font-bold">{balance.amount.toFixed(8)}</p>
-                          <p className="text-gray-400 text-xs">
-                            ${(balance.amount * (cryptoPrices[balance.asset.toLowerCase()]?.usd || 0)).toFixed(2)}
-                          </p>
-                        </div>
-                      ))
+                      userBalances.map((balance) => {
+                        const assetPrice = balance.asset === 'USD' ? 1 : (cryptoPrices[balance.asset.toLowerCase()]?.usd || 0)
+                        return (
+                          <div key={balance.asset} className="p-4 rounded-xl bg-white/5 border border-white/10">
+                            <p className="text-gray-400 text-sm mb-1">{balance.asset}</p>
+                            <p className="text-white font-bold">{balance.amount.toFixed(8)}</p>
+                            <p className="text-gray-400 text-xs">
+                              ${(balance.amount * assetPrice).toFixed(2)}
+                            </p>
+                          </div>
+                        )
+                      })
                     )}
                   </div>
                 </div>
