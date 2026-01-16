@@ -856,13 +856,16 @@ export default function DashboardPage() {
             </motion.div>
           )}
 
-          {selectedTab === 'deposit' && (
+         {selectedTab === 'deposit' && (
   <motion.div
     key="deposit"
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     exit={{ opacity: 0, y: -20 }}
   >
+    <Deposit />  {/* ✅ Use the working component */}
+  </motion.div>
+)}
               <div className="glass-effect rounded-2xl p-8 border border-white/10">
                 <h2 className="text-2xl font-bold text-white mb-6">Make a Deposit</h2>
                 
