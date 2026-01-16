@@ -6,12 +6,14 @@ import {
   PieChart, Activity, Settings, LogOut, Bell, Search, Download, Upload,
   Eye, EyeOff, History, UserCircle, Menu, X, Check, Clock, AlertCircle, FileText,
   CheckCircle, Loader2, Copy, ExternalLink, CreditCard, Building, Globe,
-  Mail, Phone, MapPin, User, Shield, HelpCircle, TrendingUp, TrendingDown
+  Mail, Phone, MapPin, User, Shield, HelpCircle, TrendingUp, TrendingDown, ArrowDownUp
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase/client'
 import { useState, useEffect } from 'react'
+import PortfolioOverview from '@/components/PortfolioOverview'
+import SwapComponent from '@/components/SwapComponent'
 
 // Types
 interface CryptoPrice {
@@ -21,6 +23,12 @@ interface CryptoPrice {
 
 interface CryptoPrices {
   [key: string]: CryptoPrice;
+}
+
+interface UserBalance {
+  asset: string
+  amount: number
+  average_buy_price: number
 }
 
 // Demo wallet addresses
@@ -54,6 +62,7 @@ export default function DashboardPage() {
   const [userPortfolio, setUserPortfolio] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
+  const [userBalances, setUserBalances] = useState<UserBalance[]>([])
   
   // Deposit State
   const [depositLoading, setDepositLoading] = useState(false)
@@ -81,7 +90,7 @@ export default function DashboardPage() {
   const { user, profile, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
 
-  // ✅ Auth Check - EXACTLY like your working version
+  // ✅ Auth Check
   useEffect(() => {
     if (authLoading) {
       console.log('Auth still loading, waiting...')
@@ -103,7 +112,7 @@ export default function DashboardPage() {
     console.log('User authenticated:', user.email, 'Role:', profile?.role)
   }, [authLoading, user, profile?.role, router])
 
-  // ✅ Fetch User Data - EXACTLY like your working version
+  // ✅ Fetch User Data
   useEffect(() => {
     if (!user) return
 
@@ -111,10 +120,11 @@ export default function DashboardPage() {
     
     const fetchUserData = async () => {
       try {
-        const [portfolioResult, transactionsResult, notificationsResult] = await Promise.all([
+        const [portfolioResult, transactionsResult, notificationsResult, balancesResult] = await Promise.all([
           supabase.from('user_portfolio').select('*').eq('user_id', user.id),
           supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-          supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10)
+          supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
+          supabase.from('user_balances').select('*').eq('user_id', user.id)
         ])
 
         if (!isMounted) return
@@ -129,6 +139,10 @@ export default function DashboardPage() {
 
         if (!notificationsResult.error && notificationsResult.data) {
           setNotifications(notificationsResult.data)
+        }
+
+        if (!balancesResult.error && balancesResult.data) {
+          setUserBalances(balancesResult.data)
         }
 
       } catch (error) {
@@ -257,8 +271,7 @@ export default function DashboardPage() {
             amount: Number(depositAmount),
             value_usd: Number(depositAmount),
             status: 'pending',
-            payment_proof_url: paymentProofUrl,
-            created_at: new Date().toISOString()
+            payment_proof_url: paymentProofUrl
           }
         ])
       
@@ -270,8 +283,7 @@ export default function DashboardPage() {
           type: 'deposit',
           title: 'Deposit Request Submitted',
           message: `Your deposit request of $${depositAmount} ${depositAsset} has been submitted.`,
-          read: false,
-          created_at: new Date().toISOString()
+          read: false
         }
       ])
       
@@ -328,8 +340,7 @@ export default function DashboardPage() {
             amount: Number(withdrawAmount),
             value_usd: Number(withdrawAmount),
             status: 'pending',
-            wallet_address: withdrawAddress || null,
-            created_at: new Date().toISOString()
+            wallet_address: withdrawAddress || null
           }
         ])
       
@@ -341,8 +352,7 @@ export default function DashboardPage() {
           type: 'withdraw',
           title: 'Withdrawal Request Submitted',
           message: `Your withdrawal request of $${withdrawAmount} ${withdrawAsset} has been submitted.`,
-          read: false,
-          created_at: new Date().toISOString()
+          read: false
         }
       ])
       
@@ -432,6 +442,8 @@ export default function DashboardPage() {
     <nav className="space-y-2">
       {[
         { id: 'overview', icon: PieChart, label: 'Overview' },
+        { id: 'portfolio', icon: TrendingUp, label: 'Portfolio' },
+        { id: 'swap', icon: ArrowDownUp, label: 'Swap', highlight: true },
         { id: 'deposit', icon: Upload, label: 'Deposit', highlight: true },
         { id: 'withdraw', icon: Download, label: 'Withdraw' },
         { id: 'transactions', icon: History, label: 'Transactions' },
@@ -838,6 +850,30 @@ export default function DashboardPage() {
             </motion.div>
           )}
 
+          {selectedTab === 'portfolio' && (
+            <motion.div
+              key="portfolio"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <PortfolioOverview />
+            </motion.div>
+          )}
+
+          {selectedTab === 'swap' && (
+            <motion.div
+              key="swap"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <div className="max-w-lg mx-auto">
+                <SwapComponent />
+              </div>
+            </motion.div>
+          )}
+
           {selectedTab === 'deposit' && (
             <motion.div
               key="deposit"
@@ -1068,9 +1104,29 @@ export default function DashboardPage() {
                   </div>
                 )}
 
+                {/* Available Balances */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold text-white mb-4">Available Balances</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {userBalances.length === 0 ? (
+                      <p className="text-gray-400 col-span-full text-center py-4">No balances available</p>
+                    ) : (
+                      userBalances.map((balance) => (
+                        <div key={balance.asset} className="p-4 rounded-xl bg-white/5 border border-white/10">
+                          <p className="text-gray-400 text-sm mb-1">{balance.asset}</p>
+                          <p className="text-white font-bold">{balance.amount.toFixed(8)}</p>
+                          <p className="text-gray-400 text-xs">
+                            ${(balance.amount * (cryptoPrices[balance.asset.toLowerCase()]?.usd || 0)).toFixed(2)}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
                 {/* Available Balance */}
                 <div className="mb-6 p-6 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30">
-                  <p className="text-gray-400 text-sm mb-1">Available Balance</p>
+                  <p className="text-gray-400 text-sm mb-1">Total Available Balance</p>
                   <p className="text-3xl font-bold text-white">
                     {hideBalance ? '••••••' : formatCurrency(calculateTotalBalance())}
                   </p>
