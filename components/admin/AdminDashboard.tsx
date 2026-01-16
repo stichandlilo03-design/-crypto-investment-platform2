@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Users, Shield, AlertCircle, CheckCircle, Bell, LogOut, 
   BarChart3, FileText, Clock, Check, X, Menu, Upload, Loader2, 
-  Home, CreditCard, UserCheck, RefreshCw, Download, Settings
+  Home, CreditCard, UserCheck, RefreshCw, Download, Settings, DollarSign,
+  Plus, Minus, TrendingUp, TrendingDown, Wallet
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { supabase } from '@/lib/supabase/client'  // ✅ Use singleton
+import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 interface Transaction {
@@ -38,10 +39,20 @@ interface User {
   created_at: string
 }
 
+interface UserBalance {
+  user_id: string
+  asset: string
+  amount: number
+  average_buy_price: number
+  user_email?: string
+  user_name?: string
+}
+
 export default function AdminDashboard() {
   const [selectedTab, setSelectedTab] = useState('dashboard')
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [userBalances, setUserBalances] = useState<UserBalance[]>([])
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [adminProfile, setAdminProfile] = useState<any>(null)
@@ -63,6 +74,15 @@ export default function AdminDashboard() {
     asset: string
   } | null>(null)
   const [adminNotes, setAdminNotes] = useState('')
+
+  // Balance Manager State
+  const [balanceManagerModal, setBalanceManagerModal] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<string>('')
+  const [adjustmentType, setAdjustmentType] = useState<'add' | 'subtract'>('add')
+  const [adjustmentAsset, setAdjustmentAsset] = useState('USD')
+  const [adjustmentAmount, setAdjustmentAmount] = useState('')
+  const [adjustmentReason, setAdjustmentReason] = useState('')
+  const [processingAdjustment, setProcessingAdjustment] = useState(false)
   
   const router = useRouter()
 
@@ -128,7 +148,7 @@ export default function AdminDashboard() {
     try {
       setLoading(true)
       
-      // ✅ FIXED: Fetch transactions without join
+      // Fetch transactions
       let transactionsQuery = supabase
         .from('transactions')
         .select('*')
@@ -149,16 +169,13 @@ export default function AdminDashboard() {
         console.error('Error fetching transactions:', transactionsError)
         setTransactions([])
       } else if (transactionsData) {
-        // ✅ Get unique user IDs
         const userIds = [...new Set(transactionsData.map(t => t.user_id))]
         
-        // ✅ Fetch user profiles separately
         const { data: profilesData } = await supabase
           .from('profiles')
           .select('id, email, full_name, phone')
           .in('id', userIds)
 
-        // ✅ Merge transactions with user data
         const enrichedTransactions = transactionsData.map(tx => {
           const userProfile = profilesData?.find(p => p.id === tx.user_id)
           return {
@@ -186,7 +203,34 @@ export default function AdminDashboard() {
         }
       }
 
-      // ✅ Calculate stats
+      // Fetch user balances for Balance Manager
+      if (selectedTab === 'balance-manager') {
+        const { data: balancesData } = await supabase
+          .from('user_balances')
+          .select('*')
+          .order('amount', { ascending: false })
+
+        if (balancesData) {
+          const userIds = [...new Set(balancesData.map(b => b.user_id))]
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('id, email, full_name')
+            .in('id', userIds)
+
+          const enrichedBalances = balancesData.map(balance => {
+            const userProfile = profilesData?.find(p => p.id === balance.user_id)
+            return {
+              ...balance,
+              user_email: userProfile?.email || 'Unknown',
+              user_name: userProfile?.full_name || 'Unknown User'
+            }
+          })
+
+          setUserBalances(enrichedBalances)
+        }
+      }
+
+      // Calculate stats
       try {
         const { data: allTransactions } = await supabase
           .from('transactions')
@@ -308,6 +352,89 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleBalanceAdjustment = async () => {
+    if (!selectedUser || !adjustmentAmount || Number(adjustmentAmount) <= 0) {
+      alert('Please fill in all fields')
+      return
+    }
+
+    setProcessingAdjustment(true)
+
+    try {
+      const user = users.find(u => u.id === selectedUser)
+      if (!user) throw new Error('User not found')
+
+      // Get current balance
+      const { data: currentBalance } = await supabase
+        .from('user_balances')
+        .select('*')
+        .eq('user_id', selectedUser)
+        .eq('asset', adjustmentAsset)
+        .single()
+
+      const currentAmount = currentBalance?.amount || 0
+      const adjustmentValue = Number(adjustmentAmount)
+      const newAmount = adjustmentType === 'add' 
+        ? currentAmount + adjustmentValue 
+        : currentAmount - adjustmentValue
+
+      if (newAmount < 0) {
+        alert('Cannot reduce balance below zero')
+        setProcessingAdjustment(false)
+        return
+      }
+
+      // Update or insert balance
+      const { error: balanceError } = await supabase
+        .from('user_balances')
+        .upsert({
+          user_id: selectedUser,
+          asset: adjustmentAsset,
+          amount: newAmount,
+          average_buy_price: currentBalance?.average_buy_price || 0
+        })
+
+      if (balanceError) throw balanceError
+
+      // Create transaction record
+      await supabase
+        .from('transactions')
+        .insert({
+          user_id: selectedUser,
+          type: adjustmentType === 'add' ? 'deposit' : 'withdraw',
+          asset: adjustmentAsset,
+          amount: adjustmentValue,
+          value_usd: adjustmentValue,
+          status: 'approved',
+          admin_notes: `Admin adjustment: ${adjustmentReason}`
+        })
+
+      // Send notification
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: selectedUser,
+          type: 'info',
+          title: 'Balance Adjustment',
+          message: `Your ${adjustmentAsset} balance has been ${adjustmentType === 'add' ? 'increased' : 'decreased'} by ${adjustmentValue}. ${adjustmentReason}`,
+          read: false
+        })
+
+      alert('Balance adjusted successfully')
+      setBalanceManagerModal(false)
+      setSelectedUser('')
+      setAdjustmentAmount('')
+      setAdjustmentReason('')
+      fetchDashboardData()
+
+    } catch (error: any) {
+      console.error('Adjustment error:', error)
+      alert(`Error: ${error.message}`)
+    } finally {
+      setProcessingAdjustment(false)
+    }
+  }
+
   const handleUpdateUserRole = async (userId: string, newRole: string) => {
     try {
       const { error } = await supabase
@@ -335,6 +462,15 @@ export default function AdminDashboard() {
     } catch (error) {
       return 'Unknown time'
     }
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount)
   }
 
   const renderTransactionsList = (title: string, icon: any, filterType?: string) => {
@@ -615,10 +751,94 @@ export default function AdminDashboard() {
                   </td>
                   <td className="py-4 px-4">
                     <button
-                      onClick={() => alert(`Manage user: ${user.email}`)}
+                      onClick={() => {
+                        setSelectedUser(user.id)
+                        setBalanceManagerModal(true)
+                      }}
                       className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 text-sm font-medium transition-all"
                     >
-                      Manage
+                      Adjust Balance
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+
+  const renderBalanceManager = () => (
+    <div className="glass-effect rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-display font-bold text-white flex items-center">
+          <DollarSign className="w-6 h-6 mr-2 text-green-400" />
+          Balance Manager
+        </h2>
+        <button
+          onClick={() => setBalanceManagerModal(true)}
+          className="px-4 py-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:opacity-90 transition-all flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          <span>New Adjustment</span>
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8">
+          <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto" />
+          <p className="text-gray-400 mt-2">Loading balances...</p>
+        </div>
+      ) : userBalances.length === 0 ? (
+        <div className="text-center py-8">
+          <Wallet className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-400">No user balances found</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">User</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Asset</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Amount</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">USD Value</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {userBalances.map((balance, index) => (
+                <tr key={`${balance.user_id}-${balance.asset}-${index}`} className="border-b border-white/5 hover:bg-white/5">
+                  <td className="py-4 px-4">
+                    <div>
+                      <div className="text-white font-medium">{balance.user_name}</div>
+                      <div className="text-sm text-gray-400">{balance.user_email}</div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4">
+                    <span className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">
+                      {balance.asset}
+                    </span>
+                  </td>
+                  <td className="py-4 px-4">
+                    <div className="text-white font-bold">{balance.amount.toFixed(8)}</div>
+                  </td>
+                  <td className="py-4 px-4">
+                    <div className="text-white font-medium">
+                      {formatCurrency(balance.amount * (balance.average_buy_price || 1))}
+                    </div>
+                  </td>
+                  <td className="py-4 px-4">
+                    <button
+                      onClick={() => {
+                        setSelectedUser(balance.user_id)
+                        setAdjustmentAsset(balance.asset)
+                        setBalanceManagerModal(true)
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 text-sm font-medium transition-all"
+                    >
+                      Adjust
                     </button>
                   </td>
                 </tr>
@@ -643,7 +863,7 @@ export default function AdminDashboard() {
     
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
-      <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40">
+      <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40 overflow-y-auto">
         <div className="flex items-center space-x-2 mb-8">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
             <Shield className="w-6 h-6 text-white" />
@@ -660,6 +880,7 @@ export default function AdminDashboard() {
             { id: 'deposits', icon: Download, label: 'Deposits' },
             { id: 'withdrawals', icon: Upload, label: 'Withdrawals' },
             { id: 'users', icon: Users, label: 'Users' },
+            { id: 'balance-manager', icon: DollarSign, label: 'Balance Manager', highlight: true },
             { id: 'settings', icon: Settings, label: 'Settings' }
           ].map(item => (
             <button
@@ -668,6 +889,8 @@ export default function AdminDashboard() {
               className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
                 selectedTab === item.id 
                   ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
+                  : item.highlight
+                  ? 'text-green-400 hover:bg-green-500/10'
                   : 'text-gray-400 hover:bg-white/5 hover:text-white'
               }`}
             >
@@ -693,7 +916,7 @@ export default function AdminDashboard() {
         {sidebarOpen && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-40" />
-            <motion.aside initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }} className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50">
+            <motion.aside initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }} className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50 overflow-y-auto">
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center space-x-2">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -711,13 +934,18 @@ export default function AdminDashboard() {
                   { id: 'deposits', icon: Download, label: 'Deposits' },
                   { id: 'withdrawals', icon: Upload, label: 'Withdrawals' },
                   { id: 'users', icon: Users, label: 'Users' },
+                  { id: 'balance-manager', icon: DollarSign, label: 'Balance Manager', highlight: true },
                   { id: 'settings', icon: Settings, label: 'Settings' }
                 ].map(item => (
                   <button
                     key={item.id}
                     onClick={() => { setSelectedTab(item.id); setSidebarOpen(false) }}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-                      selectedTab === item.id ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                      selectedTab === item.id 
+                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
+                        : item.highlight
+                        ? 'text-green-400 hover:bg-green-500/10'
+                        : 'text-gray-400 hover:bg-white/5 hover:text-white'
                     }`}
                   >
                     <item.icon className="w-5 h-5" />
@@ -752,6 +980,7 @@ export default function AdminDashboard() {
                  selectedTab === 'users' ? 'User Management' :
                  selectedTab === 'deposits' ? 'Deposit Management' :
                  selectedTab === 'withdrawals' ? 'Withdrawal Management' :
+                 selectedTab === 'balance-manager' ? 'Balance Manager' :
                  selectedTab.charAt(0).toUpperCase() + selectedTab.slice(1)}
               </h1>
               <p className="text-gray-400">Welcome back, {adminProfile?.full_name || 'Admin'}</p>
@@ -768,9 +997,11 @@ export default function AdminDashboard() {
         {selectedTab === 'deposits' && renderTransactionsList('All Deposits', Download, 'deposit')}
         {selectedTab === 'withdrawals' && renderTransactionsList('All Withdrawals', Upload, 'withdraw')}
         {selectedTab === 'users' && renderUsers()}
+        {selectedTab === 'balance-manager' && renderBalanceManager()}
         {selectedTab === 'settings' && <div className="text-center py-12"><p className="text-gray-400">Settings coming soon...</p></div>}
       </main>
 
+      {/* Transaction Review Modal */}
       {selectedAction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-effect rounded-2xl p-6 max-w-md w-full">
@@ -823,6 +1054,137 @@ export default function AdminDashboard() {
               <button onClick={() => handleApprove(selectedAction.id)} className="px-4 py-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:opacity-90 transition-all flex items-center space-x-2">
                 <Check className="w-4 h-4" />
                 <span>Approve</span>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Balance Adjustment Modal */}
+      {balanceManagerModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-effect rounded-2xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold text-white mb-4">Adjust User Balance</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">User</label>
+                <select
+                  value={selectedUser}
+                  onChange={(e) => setSelectedUser(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+                  required
+                >
+                  <option value="">Select user...</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.full_name || user.email} ({user.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Adjustment Type</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setAdjustmentType('add')}
+                    className={`p-3 rounded-xl border-2 transition-all ${
+                      adjustmentType === 'add'
+                        ? 'border-green-500 bg-green-500/20'
+                        : 'border-white/10 bg-white/5'
+                    }`}
+                  >
+                    <Plus className="w-5 h-5 text-green-400 mx-auto mb-1" />
+                    <p className="text-white text-sm font-medium">Add Profit</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAdjustmentType('subtract')}
+                    className={`p-3 rounded-xl border-2 transition-all ${
+                      adjustmentType === 'subtract'
+                        ? 'border-red-500 bg-red-500/20'
+                        : 'border-white/10 bg-white/5'
+                    }`}
+                  >
+                    <Minus className="w-5 h-5 text-red-400 mx-auto mb-1" />
+                    <p className="text-white text-sm font-medium">Deduct Loss</p>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Asset</label>
+                <select
+                  value={adjustmentAsset}
+                  onChange={(e) => setAdjustmentAsset(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+                  required
+                >
+                  <option value="USD">USD</option>
+                  <option value="BTC">BTC</option>
+                  <option value="ETH">ETH</option>
+                  <option value="USDT">USDT</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Amount</label>
+                <input
+                  type="number"
+                  value={adjustmentAmount}
+                  onChange={(e) => setAdjustmentAmount(e.target.value)}
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Reason</label>
+                <textarea
+                  value={adjustmentReason}
+                  onChange={(e) => setAdjustmentReason(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+                  rows={3}
+                  placeholder="Reason for adjustment..."
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setBalanceManagerModal(false)
+                  setSelectedUser('')
+                  setAdjustmentAmount('')
+                  setAdjustmentReason('')
+                }}
+                className="px-4 py-2 rounded-xl glass-effect hover:bg-white/10 text-white transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBalanceAdjustment}
+                disabled={processingAdjustment}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90 transition-all flex items-center space-x-2 disabled:opacity-50"
+              >
+                {processingAdjustment ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Confirm Adjustment</span>
+                  </>
+                )}
               </button>
             </div>
           </motion.div>
