@@ -14,6 +14,8 @@ import { supabase } from '@/lib/supabase/client'
 import { useState, useEffect } from 'react'
 import PortfolioOverview from '@/components/PortfolioOverview'
 import SwapComponent from '@/components/SwapComponent'
+import Deposit from '@/components/Deposit'
+
 
 // Types
 interface CryptoPrice {
@@ -855,13 +857,12 @@ export default function DashboardPage() {
           )}
 
           {selectedTab === 'deposit' && (
-            <motion.div
-              key="deposit"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="max-w-4xl mx-auto"
-            >
+  <motion.div
+    key="deposit"
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -20 }}
+  >
               <div className="glass-effect rounded-2xl p-8 border border-white/10">
                 <h2 className="text-2xl font-bold text-white mb-6">Make a Deposit</h2>
                 
