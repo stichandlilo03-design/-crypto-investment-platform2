@@ -48,6 +48,15 @@ interface UserBalance {
   user_name?: string
 }
 
+interface CryptoPrice {
+  usd: number
+  usd_24h_change: number
+}
+
+interface CryptoPrices {
+  [key: string]: CryptoPrice
+}
+
 export default function AdminDashboard() {
   const [selectedTab, setSelectedTab] = useState('dashboard')
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -57,6 +66,7 @@ export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [adminProfile, setAdminProfile] = useState<any>(null)
   const [authChecking, setAuthChecking] = useState(true)
+  const [cryptoPrices, setCryptoPrices] = useState<CryptoPrices>({})
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalDeposits: 0,
@@ -88,7 +98,32 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     checkAdminAuth()
+    fetchPrices()
   }, [])
+
+  const fetchPrices = async () => {
+    try {
+      const response = await fetch(
+        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether&vs_currencies=usd&include_24hr_change=true'
+      )
+      const data = await response.json()
+      
+      setCryptoPrices({
+        BTC: data.bitcoin || { usd: 42000, usd_24h_change: 0 },
+        ETH: data.ethereum || { usd: 3300, usd_24h_change: 0 },
+        USDT: data.tether || { usd: 1, usd_24h_change: 0 },
+        USD: { usd: 1, usd_24h_change: 0 }
+      })
+    } catch (error) {
+      console.error('Error fetching prices:', error)
+      setCryptoPrices({
+        BTC: { usd: 42000, usd_24h_change: 0 },
+        ETH: { usd: 3300, usd_24h_change: 0 },
+        USDT: { usd: 1, usd_24h_change: 0 },
+        USD: { usd: 1, usd_24h_change: 0 }
+      })
+    }
+  }
 
   const checkAdminAuth = async () => {
     try {
@@ -148,7 +183,6 @@ export default function AdminDashboard() {
     try {
       setLoading(true)
       
-      // Fetch transactions
       let transactionsQuery = supabase
         .from('transactions')
         .select('*')
@@ -203,7 +237,6 @@ export default function AdminDashboard() {
         }
       }
 
-      // Fetch user balances for Balance Manager
       if (selectedTab === 'balance-manager') {
         const { data: balancesData } = await supabase
           .from('user_balances')
@@ -230,7 +263,6 @@ export default function AdminDashboard() {
         }
       }
 
-      // Calculate stats
       try {
         const { data: allTransactions } = await supabase
           .from('transactions')
@@ -270,6 +302,12 @@ export default function AdminDashboard() {
     if (!selectedAction) return
     
     try {
+      const transaction = transactions.find(t => t.id === id)
+      if (!transaction) {
+        alert('Transaction not found')
+        return
+      }
+
       const { error: updateError } = await supabase
         .from('transactions')
         .update({
@@ -284,22 +322,86 @@ export default function AdminDashboard() {
         return
       }
 
-      const transaction = transactions.find(t => t.id === id)
-      if (transaction) {
-        await supabase
-          .from('notifications')
-          .insert([
-            {
-              user_id: transaction.user_id,
-              type: transaction.type,
-              title: `${transaction.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Approved`,
-              message: `Your ${transaction.type} of $${transaction.value_usd || transaction.amount} has been approved.`,
-              read: false
-            }
-          ])
+      const { data: currentBalance } = await supabase
+        .from('user_balances')
+        .select('*')
+        .eq('user_id', transaction.user_id)
+        .eq('asset', transaction.asset)
+        .single()
+
+      let newAmount = 0
+      let newAvgPrice = 0
+
+      if (currentBalance) {
+        const existingAmount = Number(currentBalance.amount)
+        const existingAvgPrice = Number(currentBalance.average_buy_price)
+        const newDepositAmount = Number(transaction.amount)
+        const newDepositPrice = Number(transaction.value_usd) / newDepositAmount
+
+        newAmount = existingAmount + newDepositAmount
+
+        const existingValue = existingAmount * existingAvgPrice
+        const newValue = newDepositAmount * newDepositPrice
+        newAvgPrice = (existingValue + newValue) / newAmount
+
+        console.log('Balance update:', {
+          existingAmount,
+          existingAvgPrice,
+          existingValue,
+          newDepositAmount,
+          newDepositPrice,
+          newValue,
+          newAmount,
+          newAvgPrice
+        })
+      } else {
+        newAmount = Number(transaction.amount)
+        newAvgPrice = Number(transaction.value_usd) / newAmount
       }
 
-      alert('Transaction approved successfully')
+      const { error: balanceError } = await supabase
+        .from('user_balances')
+        .upsert(
+          {
+            user_id: transaction.user_id,
+            asset: transaction.asset,
+            amount: newAmount,
+            average_buy_price: newAvgPrice
+          },
+          {
+            onConflict: 'user_id,asset',
+            ignoreDuplicates: false
+          }
+        )
+
+      if (balanceError) {
+        console.error('Balance update error:', balanceError)
+        await supabase
+          .from('transactions')
+          .update({ status: 'pending' })
+          .eq('id', id)
+        
+        alert(`Error updating balance: ${balanceError.message}`)
+        return
+      }
+
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: transaction.user_id,
+          type: transaction.type,
+          title: `${transaction.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Approved`,
+          message: `Your ${transaction.type} of $${transaction.value_usd || transaction.amount} (${transaction.amount} ${transaction.asset}) has been approved and added to your account.`,
+          read: false
+        })
+
+      alert(`✅ Transaction approved successfully!
+
+USD Amount: $${transaction.value_usd}
+Crypto Amount: ${transaction.amount} ${transaction.asset}
+New Total Balance: ${newAmount} ${transaction.asset}
+Average Buy Price: $${newAvgPrice.toFixed(2)}`)
+      
       setSelectedAction(null)
       setAdminNotes('')
       fetchDashboardData()
@@ -352,7 +454,7 @@ export default function AdminDashboard() {
     }
   }
 
-  // ✅ FIXED: Handle balance adjustment with proper UPSERT logic
+  // ✅ IMPROVED: Balance Manager with proper USD/crypto tracking
   const handleBalanceAdjustment = async () => {
     if (!selectedUser || !adjustmentAmount || Number(adjustmentAmount) <= 0) {
       alert('Please fill in all fields')
@@ -367,7 +469,7 @@ export default function AdminDashboard() {
 
       const adjustmentValue = Number(adjustmentAmount)
 
-      // ✅ Step 1: Get current balance (if exists)
+      // Get current balance
       const { data: currentBalance } = await supabase
         .from('user_balances')
         .select('*')
@@ -376,9 +478,17 @@ export default function AdminDashboard() {
         .single()
 
       const currentAmount = currentBalance?.amount || 0
+      
+      // ✅ For crypto assets, convert USD to crypto amount
+      let cryptoAdjustmentAmount = adjustmentValue
+      if (adjustmentAsset !== 'USD') {
+        const currentPrice = cryptoPrices[adjustmentAsset]?.usd || 1
+        cryptoAdjustmentAmount = adjustmentValue / currentPrice
+      }
+
       const newAmount = adjustmentType === 'add' 
-        ? currentAmount + adjustmentValue 
-        : currentAmount - adjustmentValue
+        ? currentAmount + cryptoAdjustmentAmount 
+        : currentAmount - cryptoAdjustmentAmount
 
       if (newAmount < 0) {
         alert('Cannot reduce balance below zero')
@@ -386,7 +496,7 @@ export default function AdminDashboard() {
         return
       }
 
-      // ✅ Step 2: UPSERT balance (handles both insert and update)
+      // UPSERT balance - don't change average_buy_price for admin adjustments
       const { error: balanceError } = await supabase
         .from('user_balances')
         .upsert(
@@ -397,7 +507,7 @@ export default function AdminDashboard() {
             average_buy_price: currentBalance?.average_buy_price || 1
           },
           {
-            onConflict: 'user_id,asset', // This is the key! Prevents duplicate key error
+            onConflict: 'user_id,asset',
             ignoreDuplicates: false
           }
         )
@@ -407,39 +517,48 @@ export default function AdminDashboard() {
         throw balanceError
       }
 
-      // ✅ Step 3: Create transaction record
-      const { error: txError } = await supabase
+      // Log adjustment to tracking table
+      await supabase
+        .from('admin_balance_adjustments')
+        .insert({
+          user_id: selectedUser,
+          asset: adjustmentAsset,
+          amount: adjustmentValue, // Store USD amount
+          adjustment_type: adjustmentType,
+          reason: adjustmentReason,
+          admin_id: adminProfile.id
+        })
+
+      // Create transaction record
+      await supabase
         .from('transactions')
         .insert({
           user_id: selectedUser,
           type: adjustmentType === 'add' ? 'deposit' : 'withdraw',
           asset: adjustmentAsset,
-          amount: adjustmentValue,
-          value_usd: adjustmentValue,
+          amount: cryptoAdjustmentAmount, // Crypto amount
+          value_usd: adjustmentValue, // USD value
           status: 'approved',
           admin_notes: `Admin adjustment: ${adjustmentReason}`
         })
 
-      if (txError) {
-        console.error('Transaction insert error:', txError)
-      }
-
-      // ✅ Step 4: Send notification
-      const { error: notifError } = await supabase
+      // Send notification
+      await supabase
         .from('notifications')
         .insert({
           user_id: selectedUser,
           type: 'info',
           title: 'Balance Adjustment',
-          message: `Your ${adjustmentAsset} balance has been ${adjustmentType === 'add' ? 'increased' : 'decreased'} by ${adjustmentValue}. ${adjustmentReason}`,
+          message: `Your ${adjustmentAsset} balance has been ${adjustmentType === 'add' ? 'increased' : 'decreased'} by $${adjustmentValue} (${cryptoAdjustmentAmount.toFixed(8)} ${adjustmentAsset}). ${adjustmentReason}`,
           read: false
         })
 
-      if (notifError) {
-        console.error('Notification insert error:', notifError)
-      }
+      alert(`✅ Balance adjusted successfully!
 
-      alert(`Balance adjusted successfully! ${adjustmentType === 'add' ? 'Added' : 'Deducted'} ${adjustmentValue} ${adjustmentAsset}`)
+USD Amount: $${adjustmentValue}
+Crypto Amount: ${cryptoAdjustmentAmount.toFixed(8)} ${adjustmentAsset}
+New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
+      
       setBalanceManagerModal(false)
       setSelectedUser('')
       setAdjustmentAmount('')
@@ -1020,7 +1139,6 @@ export default function AdminDashboard() {
         {selectedTab === 'settings' && <div className="text-center py-12"><p className="text-gray-400">Settings coming soon...</p></div>}
       </main>
 
-      {/* Transaction Review Modal */}
       {selectedAction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-effect rounded-2xl p-6 max-w-md w-full">
@@ -1079,11 +1197,11 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Balance Adjustment Modal */}
       {balanceManagerModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-effect rounded-2xl p-6 max-w-md w-full">
             <h3 className="text-xl font-bold text-white mb-4">Adjust User Balance</h3>
+            <p className="text-sm text-gray-400 mb-4">💡 Enter amount in USD. It will be converted to crypto automatically.</p>
             
             <div className="space-y-4">
               <div>
@@ -1147,10 +1265,15 @@ export default function AdminDashboard() {
                   <option value="ETH">ETH</option>
                   <option value="USDT">USDT</option>
                 </select>
+                {adjustmentAsset !== 'USD' && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Current {adjustmentAsset} price: ${cryptoPrices[adjustmentAsset]?.usd.toLocaleString() || 'Loading...'}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block text-sm text-gray-400 mb-2">Amount</label>
+                <label className="block text-sm text-gray-400 mb-2">Amount (USD)</label>
                 <input
                   type="number"
                   value={adjustmentAmount}
@@ -1161,6 +1284,11 @@ export default function AdminDashboard() {
                   className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
                   required
                 />
+                {adjustmentAmount && adjustmentAsset !== 'USD' && (
+                  <p className="text-xs text-green-400 mt-1">
+                    ≈ {(Number(adjustmentAmount) / (cryptoPrices[adjustmentAsset]?.usd || 1)).toFixed(8)} {adjustmentAsset}
+                  </p>
+                )}
               </div>
 
               <div>
