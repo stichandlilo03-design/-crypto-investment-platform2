@@ -5,9 +5,12 @@ import { ArrowDownCircle, Loader2, DollarSign, Bitcoin, AlertCircle, TrendingUp,
 import { supabase } from '@/lib/supabase/client'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/hooks/useAuth'  // ✅ ADD THIS
 
 export default function DepositPage() {
   const router = useRouter()
+  const { user, loading: authLoading } = useAuth()  // ✅ ADD THIS
+  
   const [selectedAsset, setSelectedAsset] = useState('BTC')
   const [usdAmount, setUsdAmount] = useState('')
   const [cryptoAmount, setCryptoAmount] = useState('0.00000000')
@@ -17,6 +20,15 @@ export default function DepositPage() {
   const [cryptoPrices, setCryptoPrices] = useState<any>({})
   const [pricesLoading, setPricesLoading] = useState(true)
   const [uploadingProof, setUploadingProof] = useState(false)
+
+  // ✅ ADD AUTH CHECK
+  useEffect(() => {
+    if (authLoading) return
+    
+    if (!user) {
+      router.push('/login')
+    }
+  }, [user, authLoading, router])
 
   useEffect(() => {
     fetchPrices()
@@ -44,7 +56,7 @@ export default function DepositPage() {
     } catch (error) {
       console.error('❌ Error fetching prices:', error)
       setCryptoPrices({
-        BTC: { price: 42000, change24h: 0 },
+        BTC: { price: 95234, change24h: 0 },
         ETH: { price: 3300, change24h: 0 },
         USDT: { price: 1, change24h: 0 },
         USD: { price: 1, change24h: 0 }
@@ -96,7 +108,7 @@ export default function DepositPage() {
   const uploadPaymentProof = async (file: File): Promise<string | null> => {
     try {
       setUploadingProof(true)
-      const { data: { user } } = await supabase.auth.getUser()
+      
       if (!user) throw new Error('User not authenticated')
 
       const fileExt = file.name.split('.').pop()
@@ -126,6 +138,12 @@ export default function DepositPage() {
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!user) {
+      alert('Please login first')
+      router.push('/login')
+      return
+    }
     
     const usd = parseFloat(usdAmount)
     const crypto = parseFloat(cryptoAmount)
@@ -172,9 +190,6 @@ export default function DepositPage() {
     setLoading(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
-
       // Upload payment proof
       const proofUrl = await uploadPaymentProof(paymentProof)
       if (!proofUrl) throw new Error('Failed to upload payment proof')
@@ -195,8 +210,8 @@ export default function DepositPage() {
           user_id: user.id,
           type: 'deposit',
           asset: selectedAsset,
-          amount: crypto,      // ✅ THIS IS THE CRYPTO AMOUNT (e.g., 0.00238 BTC)
-          value_usd: usd,      // ✅ THIS IS THE USD AMOUNT (e.g., $100)
+          amount: crypto,      // ✅ CRYPTO AMOUNT
+          value_usd: usd,      // ✅ USD AMOUNT
           status: 'pending',
           payment_method: paymentMethod,
           payment_proof_url: proofUrl
@@ -247,6 +262,20 @@ export default function DepositPage() {
     }
   }
 
+  // ✅ SHOW LOADING WHILE CHECKING AUTH
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />
+      </div>
+    )
+  }
+
+  // ✅ IF NOT LOGGED IN, DON'T SHOW FORM
+  if (!user) {
+    return null
+  }
+
   const currentPrice = cryptoPrices[selectedAsset]?.price || 1
   const priceChange = cryptoPrices[selectedAsset]?.change24h || 0
   const isPriceUp = priceChange >= 0
@@ -265,7 +294,7 @@ export default function DepositPage() {
             </div>
           </div>
 
-          {/* 🔍 DEBUG INFO - SHOWS REAL-TIME CONVERSION */}
+          {/* 🔍 DEBUG INFO */}
           {!pricesLoading && (
             <div className="mb-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
               <p className="text-blue-400 font-mono text-sm">
@@ -329,7 +358,7 @@ export default function DepositPage() {
               )}
             </div>
 
-            {/* USD Amount Input */}
+            {/* USD Input */}
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
                 USD Amount (How much you're depositing)
@@ -343,13 +372,13 @@ export default function DepositPage() {
                   placeholder="0.00"
                   min="1"
                   step="0.01"
-                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 text-white text-lg font-bold focus:outline-none focus:border-purple-500 transition-all"
+                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 text-white text-lg font-bold focus:outline-none focus:border-purple-500"
                   required
                 />
               </div>
             </div>
 
-            {/* Crypto Amount Display */}
+            {/* Crypto Display */}
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
                 You Will Receive
@@ -366,12 +395,9 @@ export default function DepositPage() {
                   {selectedAsset}
                 </span>
               </div>
-              <p className="text-gray-400 text-xs mt-2">
-                Calculated at current market price
-              </p>
             </div>
 
-            {/* Conversion Summary */}
+            {/* Summary */}
             {parseFloat(usdAmount) > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
@@ -379,20 +405,20 @@ export default function DepositPage() {
                 className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20"
               >
                 <div className="flex items-start space-x-3">
-                  <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                  <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="text-blue-400 font-medium text-sm mb-2">Deposit Summary:</p>
+                    <p className="text-blue-400 font-medium text-sm mb-2">Summary:</p>
                     <div className="space-y-1.5 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-400">USD Depositing:</span>
+                        <span className="text-gray-400">USD:</span>
                         <span className="text-white font-bold">${parseFloat(usdAmount).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">{selectedAsset} Receiving:</span>
-                        <span className="text-white font-bold">{cryptoAmount} {selectedAsset}</span>
+                        <span className="text-gray-400">{selectedAsset}:</span>
+                        <span className="text-white font-bold">{cryptoAmount}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Price Per {selectedAsset}:</span>
+                        <span className="text-gray-400">Price:</span>
                         <span className="text-white">${currentPrice.toLocaleString()}</span>
                       </div>
                     </div>
@@ -403,9 +429,7 @@ export default function DepositPage() {
 
             {/* Payment Method */}
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                Payment Method
-              </label>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Payment Method</label>
               <select
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value)}
@@ -419,30 +443,26 @@ export default function DepositPage() {
               </select>
             </div>
 
-            {/* Payment Proof Upload */}
+            {/* Payment Proof */}
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                Payment Proof
-              </label>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Payment Proof</label>
               <input
                 type="file"
                 accept="image/*,.pdf"
                 onChange={handleFileUpload}
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-500 file:text-white file:cursor-pointer hover:file:bg-purple-600"
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-500 file:text-white file:cursor-pointer"
                 required
               />
               {paymentProof && (
-                <p className="text-green-400 text-sm mt-2">
-                  ✓ {paymentProof.name} uploaded
-                </p>
+                <p className="text-green-400 text-sm mt-2">✓ {paymentProof.name}</p>
               )}
             </div>
 
-            {/* Submit Button */}
+            {/* Submit */}
             <button
               type="submit"
-              disabled={loading || uploadingProof || !paymentProof || !usdAmount || parseFloat(cryptoAmount) <= 0}
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              disabled={loading || uploadingProof || !paymentProof || !usdAmount}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center space-x-2"
             >
               {loading || uploadingProof ? (
                 <>
@@ -458,14 +478,14 @@ export default function DepositPage() {
             </button>
           </form>
 
-          {/* Important Notes */}
+          {/* Notes */}
           <div className="mt-6 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
             <p className="text-yellow-400 text-sm font-medium mb-2">📝 How it works:</p>
             <ul className="text-gray-400 text-xs space-y-1">
-              <li>• Enter USD amount you're depositing</li>
-              <li>• System calculates crypto at current market price</li>
-              <li>• Admin approves deposit (1-24 hours)</li>
-              <li>• You receive exact crypto amount shown</li>
+              <li>• Enter USD amount</li>
+              <li>• System calculates crypto at market price</li>
+              <li>• Admin approves (1-24 hours)</li>
+              <li>• You receive exact crypto shown</li>
             </ul>
           </div>
         </div>
