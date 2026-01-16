@@ -1244,145 +1244,241 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
       )}
 
       {balanceManagerModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-effect rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-white mb-4">Adjust User Balance</h3>
-            <p className="text-sm text-gray-400 mb-4">💡 Enter amount in USD. It will be converted to crypto automatically.</p>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">User</label>
-                <select
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
-                  required
-                >
-                  <option value="">Select user...</option>
-                  {users.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.full_name || user.email} ({user.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Adjustment Type</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setAdjustmentType('add')}
-                    className={`p-3 rounded-xl border-2 transition-all ${
-                      adjustmentType === 'add'
-                        ? 'border-green-500 bg-green-500/20'
-                        : 'border-white/10 bg-white/5'
-                    }`}
-                  >
-                    <Plus className="w-5 h-5 text-green-400 mx-auto mb-1" />
-                    <p className="text-white text-sm font-medium">Add Profit</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setAdjustmentType('subtract')}
-                    className={`p-3 rounded-xl border-2 transition-all ${
-                      adjustmentType === 'subtract'
-                        ? 'border-red-500 bg-red-500/20'
-                        : 'border-white/10 bg-white/5'
-                    }`}
-                  >
-                    <Minus className="w-5 h-5 text-red-400 mx-auto mb-1" />
-                    <p className="text-white text-sm font-medium">Deduct Loss</p>
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Asset</label>
-                <select
-                  value={adjustmentAsset}
-                  onChange={(e) => setAdjustmentAsset(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
-                  required
-                >
-                  <option value="USD">USD</option>
-                  <option value="BTC">BTC</option>
-                  <option value="ETH">ETH</option>
-                  <option value="USDT">USDT</option>
-                </select>
-                {adjustmentAsset !== 'USD' && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    Current {adjustmentAsset} price: ${cryptoPrices[adjustmentAsset]?.price.toLocaleString() || 'Loading...'}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Amount (USD)</label>
-                <input
-                  type="number"
-                  value={adjustmentAmount}
-                  onChange={(e) => setAdjustmentAmount(e.target.value)}
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
-                  required
-                />
-                {adjustmentAmount && adjustmentAsset !== 'USD' && (
-                  <p className="text-xs text-green-400 mt-1">
-                    ≈ {(Number(adjustmentAmount) / (cryptoPrices[adjustmentAsset]?.price || 1)).toFixed(8)} {adjustmentAsset}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Reason</label>
-                <textarea
-                  value={adjustmentReason}
-                  onChange={(e) => setAdjustmentReason(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
-                  rows={3}
-                  placeholder="Reason for adjustment..."
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end space-x-3 mt-6">
-              <button
-                onClick={() => {
-                  setBalanceManagerModal(false)
-                  setSelectedUser('')
-                  setAdjustmentAmount('')
-                  setAdjustmentReason('')
-                }}
-                className="px-4 py-2 rounded-xl glass-effect hover:bg-white/10 text-white transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBalanceAdjustment}
-                disabled={processingAdjustment}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90 transition-all flex items-center space-x-2 disabled:opacity-50"
-              >
-                {processingAdjustment ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Processing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>Confirm Adjustment</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </motion.div>
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }} 
+      animate={{ opacity: 1, scale: 1 }} 
+      className="glass-effect rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
+    >
+      <h3 className="text-xl font-bold text-white mb-2">Adjust User Balance</h3>
+      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 mb-4">
+        <p className="text-sm text-blue-400">
+          💡 <strong>How it works:</strong> Enter amount in USD. System automatically converts to crypto using live market rates.
+        </p>
+      </div>
+      
+      <div className="space-y-4">
+        {/* User Selection */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Select User *</label>
+          <select
+            value={selectedUser}
+            onChange={(e) => setSelectedUser(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+            required
+          >
+            <option value="">Select user...</option>
+            {users.map(user => (
+              <option key={user.id} value={user.id}>
+                {user.full_name || user.email} ({user.email})
+              </option>
+            ))}
+          </select>
         </div>
-      )}
-    </div>
-  )
-}
+
+        {/* Adjustment Type */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Adjustment Type *</label>
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => setAdjustmentType('add')}
+              className={`p-4 rounded-xl border-2 transition-all ${
+                adjustmentType === 'add'
+                  ? 'border-green-500 bg-green-500/20'
+                  : 'border-white/10 bg-white/5 hover:border-white/20'
+              }`}
+            >
+              <TrendingUp className="w-6 h-6 text-green-400 mx-auto mb-2" />
+              <p className="text-white text-sm font-bold">Add Profit</p>
+              <p className="text-gray-400 text-xs mt-1">Increase balance</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAdjustmentType('subtract')}
+              className={`p-4 rounded-xl border-2 transition-all ${
+                adjustmentType === 'subtract'
+                  ? 'border-red-500 bg-red-500/20'
+                  : 'border-white/10 bg-white/5 hover:border-white/20'
+              }`}
+            >
+              <TrendingDown className="w-6 h-6 text-red-400 mx-auto mb-2" />
+              <p className="text-white text-sm font-bold">Deduct Loss</p>
+              <p className="text-gray-400 text-xs mt-1">Decrease balance</p>
+            </button>
+          </div>
+        </div>
+
+        {/* Asset Selection */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Asset *</label>
+          <select
+            value={adjustmentAsset}
+            onChange={(e) => setAdjustmentAsset(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+            required
+          >
+            <option value="USD">USD (US Dollar)</option>
+            <option value="BTC">BTC (Bitcoin)</option>
+            <option value="ETH">ETH (Ethereum)</option>
+            <option value="USDT">USDT (Tether)</option>
+            <option value="SOL">SOL (Solana)</option>
+            <option value="ADA">ADA (Cardano)</option>
+            <option value="BNB">BNB (Binance Coin)</option>
+            <option value="XRP">XRP (Ripple)</option>
+            <option value="DOGE">DOGE (Dogecoin)</option>
+          </select>
+          
+          {/* Live Price Display */}
+          {adjustmentAsset !== 'USD' && cryptoPrices[adjustmentAsset] && (
+            <div className="mt-2 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-400">Current {adjustmentAsset} Price:</span>
+                <span className="text-white font-bold">
+                  ${cryptoPrices[adjustmentAsset].price.toLocaleString(undefined, { 
+                    minimumFractionDigits: 2, 
+                    maximumFractionDigits: 2 
+                  })}
+                </span>
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-gray-400">24h Change:</span>
+                <span className={`text-xs font-medium ${
+                  cryptoPrices[adjustmentAsset].change24h >= 0 ? 'text-green-400' : 'text-red-400'
+                }`}>
+                  {cryptoPrices[adjustmentAsset].change24h >= 0 ? '+' : ''}
+                  {cryptoPrices[adjustmentAsset].change24h.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* USD Amount Input */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Amount in USD *</label>
+          <div className="relative">
+            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="number"
+              value={adjustmentAmount}
+              onChange={(e) => setAdjustmentAmount(e.target.value)}
+              placeholder="0.00"
+              min="0.01"
+              step="0.01"
+              className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-lg font-bold focus:outline-none focus:border-purple-500"
+              required
+            />
+          </div>
+          
+          {/* Conversion Preview */}
+          {adjustmentAmount && Number(adjustmentAmount) > 0 && (
+            <div className="mt-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+              <p className="text-sm text-blue-400 mb-2">💰 Conversion Preview:</p>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">USD Amount:</span>
+                  <span className="text-white font-bold">${Number(adjustmentAmount).toFixed(2)}</span>
+                </div>
+                {adjustmentAsset !== 'USD' && cryptoPrices[adjustmentAsset] && (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">{adjustmentAsset} Amount:</span>
+                      <span className="text-green-400 font-bold text-lg">
+                        {(Number(adjustmentAmount) / cryptoPrices[adjustmentAsset].price).toFixed(8)} {adjustmentAsset}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">Rate:</span>
+                      <span className="text-gray-300 text-sm">
+                        1 {adjustmentAsset} = ${cryptoPrices[adjustmentAsset].price.toLocaleString()}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Reason */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Reason for Adjustment *</label>
+          <textarea
+            value={adjustmentReason}
+            onChange={(e) => setAdjustmentReason(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+            rows={3}
+            placeholder="e.g., Trading profit from EUR/USD, Investment returns, Bonus reward, etc."
+            required
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            ℹ️ This reason will be visible to the user in their transaction history
+          </p>
+        </div>
+
+        {/* Warning for Deductions */}
+        {adjustmentType === 'subtract' && (
+          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+            <div className="flex items-start space-x-2">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-red-400 text-sm font-medium">Warning: Deducting Balance</p>
+                <p className="text-gray-400 text-xs mt-1">
+                  This will reduce the user's balance. Make sure this is intended.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-end space-x-3 mt-6 pt-6 border-t border-white/10">
+        <button
+          onClick={() => {
+            setBalanceManagerModal(false)
+            setSelectedUser('')
+            setAdjustmentAmount('')
+            setAdjustmentReason('')
+          }}
+          disabled={processingAdjustment}
+          className="px-6 py-3 rounded-xl glass-effect hover:bg-white/10 text-white transition-all disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleBalanceAdjustment}
+          disabled={processingAdjustment || !selectedUser || !adjustmentAmount || !adjustmentReason}
+          className={`px-6 py-3 rounded-xl text-white font-medium hover:opacity-90 transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+            adjustmentType === 'add'
+              ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+              : 'bg-gradient-to-r from-red-500 to-orange-500'
+          }`}
+        >
+          {processingAdjustment ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Processing...</span>
+            </>
+          ) : (
+            <>
+              {adjustmentType === 'add' ? (
+                <>
+                  <TrendingUp className="w-5 h-5" />
+                  <span>Add Profit</span>
+                </>
+              ) : (
+                <>
+                  <TrendingDown className="w-5 h-5" />
+                  <span>Deduct Loss</span>
+                </>
+              )}
+            </>
+          )}
+        </button>
+      </div>
+    </motion.div>
+  </div>
+)}
