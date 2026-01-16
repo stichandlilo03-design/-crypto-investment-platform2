@@ -352,6 +352,7 @@ export default function AdminDashboard() {
     }
   }
 
+  // ✅ FIXED: Handle balance adjustment with proper UPSERT logic
   const handleBalanceAdjustment = async () => {
     if (!selectedUser || !adjustmentAmount || Number(adjustmentAmount) <= 0) {
       alert('Please fill in all fields')
@@ -364,7 +365,9 @@ export default function AdminDashboard() {
       const user = users.find(u => u.id === selectedUser)
       if (!user) throw new Error('User not found')
 
-      // Get current balance
+      const adjustmentValue = Number(adjustmentAmount)
+
+      // ✅ Step 1: Get current balance (if exists)
       const { data: currentBalance } = await supabase
         .from('user_balances')
         .select('*')
@@ -373,7 +376,6 @@ export default function AdminDashboard() {
         .single()
 
       const currentAmount = currentBalance?.amount || 0
-      const adjustmentValue = Number(adjustmentAmount)
       const newAmount = adjustmentType === 'add' 
         ? currentAmount + adjustmentValue 
         : currentAmount - adjustmentValue
@@ -384,20 +386,29 @@ export default function AdminDashboard() {
         return
       }
 
-      // Update or insert balance
+      // ✅ Step 2: UPSERT balance (handles both insert and update)
       const { error: balanceError } = await supabase
         .from('user_balances')
-        .upsert({
-          user_id: selectedUser,
-          asset: adjustmentAsset,
-          amount: newAmount,
-          average_buy_price: currentBalance?.average_buy_price || 0
-        })
+        .upsert(
+          {
+            user_id: selectedUser,
+            asset: adjustmentAsset,
+            amount: newAmount,
+            average_buy_price: currentBalance?.average_buy_price || 1
+          },
+          {
+            onConflict: 'user_id,asset', // This is the key! Prevents duplicate key error
+            ignoreDuplicates: false
+          }
+        )
 
-      if (balanceError) throw balanceError
+      if (balanceError) {
+        console.error('Balance upsert error:', balanceError)
+        throw balanceError
+      }
 
-      // Create transaction record
-      await supabase
+      // ✅ Step 3: Create transaction record
+      const { error: txError } = await supabase
         .from('transactions')
         .insert({
           user_id: selectedUser,
@@ -409,8 +420,12 @@ export default function AdminDashboard() {
           admin_notes: `Admin adjustment: ${adjustmentReason}`
         })
 
-      // Send notification
-      await supabase
+      if (txError) {
+        console.error('Transaction insert error:', txError)
+      }
+
+      // ✅ Step 4: Send notification
+      const { error: notifError } = await supabase
         .from('notifications')
         .insert({
           user_id: selectedUser,
@@ -420,7 +435,11 @@ export default function AdminDashboard() {
           read: false
         })
 
-      alert('Balance adjusted successfully')
+      if (notifError) {
+        console.error('Notification insert error:', notifError)
+      }
+
+      alert(`Balance adjusted successfully! ${adjustmentType === 'add' ? 'Added' : 'Deducted'} ${adjustmentValue} ${adjustmentAsset}`)
       setBalanceManagerModal(false)
       setSelectedUser('')
       setAdjustmentAmount('')
@@ -429,7 +448,7 @@ export default function AdminDashboard() {
 
     } catch (error: any) {
       console.error('Adjustment error:', error)
-      alert(`Error: ${error.message}`)
+      alert(`Error: ${error.message || 'Failed to adjust balance'}`)
     } finally {
       setProcessingAdjustment(false)
     }
