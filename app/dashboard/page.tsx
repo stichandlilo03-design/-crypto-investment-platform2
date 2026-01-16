@@ -4,9 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Wallet, ArrowUpRight, ArrowDownRight, DollarSign,
   PieChart, Activity, Settings, LogOut, Bell, Search, Download, Upload,
-  Eye, EyeOff, History, UserCircle, Menu, X, Check, Clock, AlertCircle, FileText,
-  CheckCircle, Loader2, Copy, ExternalLink, CreditCard, Building, Globe,
-  Mail, Phone, MapPin, User, Shield, HelpCircle, TrendingUp, TrendingDown, ArrowDownUp
+  Eye, EyeOff, History, Menu, X, Clock, 
+  CheckCircle, Loader2, TrendingUp, TrendingDown, ArrowDownUp
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -15,7 +14,6 @@ import { useState, useEffect } from 'react'
 import PortfolioOverview from '@/components/PortfolioOverview'
 import SwapComponent from '@/components/SwapComponent'
 import Deposit from '@/components/Deposit'
-
 
 // Types
 interface CryptoPrice {
@@ -33,24 +31,6 @@ interface UserBalance {
   average_buy_price: number
 }
 
-// Demo wallet addresses
-const DEMO_WALLETS = {
-  BTC: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-  ETH: '0x742d35Cc6634C0532925a3b844Bc9e70C6d4e5a1',
-  USDT: 'TBA6C4H5G7J8K9L0M1N2P3Q4R5S6T7U8V9W0',
-}
-
-// Wire transfer details
-const WIRE_TRANSFER_DETAILS = {
-  bankName: 'JPMorgan Chase Bank',
-  accountName: 'CRYPTOVAULT TRADING LTD',
-  accountNumber: '9876543210',
-  routingNumber: '021000021',
-  swiftCode: 'CHASUS33',
-  iban: 'US70000000000000000000',
-  address: '383 Madison Avenue, New York, NY 10017, USA',
-}
-
 export default function DashboardPage() {
   // UI State
   const [hideBalance, setHideBalance] = useState(false)
@@ -64,16 +44,6 @@ export default function DashboardPage() {
   const [transactions, setTransactions] = useState<any[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
   const [userBalances, setUserBalances] = useState<UserBalance[]>([])
-  
-  // Deposit State
-  const [depositLoading, setDepositLoading] = useState(false)
-  const [depositSuccess, setDepositSuccess] = useState(false)
-  const [depositError, setDepositError] = useState('')
-  const [depositAmount, setDepositAmount] = useState('')
-  const [depositAsset, setDepositAsset] = useState('USD')
-  const [depositMethod, setDepositMethod] = useState<'wire' | 'crypto'>('wire')
-  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
-  const [paymentProofPreview, setPaymentProofPreview] = useState<string | null>(null)
   
   // Withdrawal State
   const [withdrawLoading, setWithdrawLoading] = useState(false)
@@ -185,7 +155,7 @@ export default function DashboardPage() {
     const depositTransactions = transactions.filter(tx => 
       tx.type === 'deposit' && tx.status === 'approved'
     )
-    return depositTransactions.reduce((total, tx) => total + Number(tx.amount), 0)
+    return depositTransactions.reduce((total, tx) => total + Number(tx.value_usd || tx.amount), 0)
   }
 
   // Calculate Total Withdrawals
@@ -193,116 +163,7 @@ export default function DashboardPage() {
     const withdrawalTransactions = transactions.filter(tx => 
       tx.type === 'withdraw' && tx.status === 'approved'
     )
-    return withdrawalTransactions.reduce((total, tx) => total + Number(tx.amount), 0)
-  }
-
-  // Handle File Upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-      alert('Please upload an image or PDF file')
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be less than 5MB')
-      return
-    }
-
-    setPaymentProofFile(file)
-
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPaymentProofPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    } else {
-      setPaymentProofPreview(null)
-    }
-  }
-
-  // Handle Deposit
-  const handleDeposit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setDepositLoading(true)
-    setDepositError('')
-    setDepositSuccess(false)
-    
-    try {
-      if (!user) throw new Error('User not authenticated')
-      if (!depositAmount || Number(depositAmount) <= 0) throw new Error('Invalid amount')
-
-      let paymentProofUrl = ''
-      if (paymentProofFile) {
-        const fileExt = paymentProofFile.name.split('.').pop()
-        const fileName = `${user.id}/${Date.now()}.${fileExt}`
-        
-        const { error: uploadError } = await supabase.storage
-          .from('payment-proofs')
-          .upload(fileName, paymentProofFile)
-        
-        if (uploadError) throw uploadError
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('payment-proofs')
-          .getPublicUrl(fileName)
-        
-        paymentProofUrl = publicUrl
-      }
-
-      const { error: insertError } = await supabase
-        .from('transactions')
-        .insert([
-          {
-            user_id: user.id,
-            type: 'deposit',
-            asset: depositAsset,
-            amount: Number(depositAmount),
-            value_usd: Number(depositAmount),
-            status: 'pending',
-            payment_proof_url: paymentProofUrl
-          }
-        ])
-      
-      if (insertError) throw insertError
-      
-      await supabase.from('notifications').insert([
-        {
-          user_id: user.id,
-          type: 'deposit',
-          title: 'Deposit Request Submitted',
-          message: `Your deposit request of $${depositAmount} ${depositAsset} has been submitted.`,
-          read: false
-        }
-      ])
-      
-      setDepositSuccess(true)
-      setDepositAmount('')
-      setDepositAsset('USD')
-      setPaymentProofFile(null)
-      setPaymentProofPreview(null)
-      
-      const { data } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-      
-      if (data) setTransactions(data)
-      
-      setTimeout(() => {
-        setDepositSuccess(false)
-        setSelectedTab('overview')
-      }, 3000)
-      
-    } catch (error: any) {
-      setDepositError(error.message || 'Deposit failed')
-    } finally {
-      setDepositLoading(false)
-    }
+    return withdrawalTransactions.reduce((total, tx) => total + Number(tx.value_usd || tx.amount), 0)
   }
 
   // Handle Withdrawal
@@ -372,18 +233,11 @@ export default function DashboardPage() {
     }
   }
 
-  // Copy to Clipboard
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-      .then(() => alert('Copied!'))
-      .catch(err => console.error('Failed to copy:', err))
-  }
-
   // Filter Transactions
   const filteredTransactions = transactions.filter(tx => {
     const matchesSearch = searchQuery === '' || 
-      tx.asset.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tx.type.toLowerCase().includes(searchQuery.toLowerCase())
+      tx.asset?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tx.type?.toLowerCase().includes(searchQuery.toLowerCase())
     
     const matchesStatus = filterStatus === 'all' || tx.status === filterStatus
     const matchesType = filterType === 'all' || tx.type === filterType
@@ -781,7 +635,7 @@ export default function DashboardPage() {
                           </div>
                           <div className="text-right">
                             <p className="font-medium text-white">
-                              {tx.type === 'deposit' ? '+' : '-'}{formatCurrency(Number(tx.amount))}
+                              {tx.type === 'deposit' ? '+' : '-'}{formatCurrency(Number(tx.value_usd || tx.amount))}
                             </p>
                             {getStatusBadge(tx.status)}
                           </div>
@@ -856,211 +710,14 @@ export default function DashboardPage() {
             </motion.div>
           )}
 
-         {selectedTab === 'deposit' && (
-  <motion.div
-    key="deposit"
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: -20 }}
-  >
-    <Deposit />  {/* ✅ Use the working component */}
-  </motion.div>
-)}
-              <div className="glass-effect rounded-2xl p-8 border border-white/10">
-                <h2 className="text-2xl font-bold text-white mb-6">Make a Deposit</h2>
-                
-                {depositSuccess && (
-                  <div className="mb-6 p-4 rounded-xl bg-green-500/20 border border-green-500/30 flex items-start space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-green-400 font-medium">Deposit Request Submitted!</p>
-                      <p className="text-gray-400 text-sm">Your deposit is pending approval.</p>
-                    </div>
-                  </div>
-                )}
-
-                {depositError && (
-                  <div className="mb-6 p-4 rounded-xl bg-red-500/20 border border-red-500/30 flex items-start space-x-3">
-                    <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-red-400">{depositError}</p>
-                  </div>
-                )}
-
-                <form onSubmit={handleDeposit} className="space-y-6">
-                  {/* Deposit Method */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-3">Deposit Method</label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <button
-                        type="button"
-                        onClick={() => setDepositMethod('wire')}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          depositMethod === 'wire' 
-                            ? 'border-purple-500 bg-purple-500/20' 
-                            : 'border-white/10 bg-white/5'
-                        }`}
-                      >
-                        <Building className="w-6 h-6 text-white mx-auto mb-2" />
-                        <p className="text-white font-medium">Bank Wire</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setDepositMethod('crypto')}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          depositMethod === 'crypto' 
-                            ? 'border-purple-500 bg-purple-500/20' 
-                            : 'border-white/10 bg-white/5'
-                        }`}
-                      >
-                        <Wallet className="w-6 h-6 text-white mx-auto mb-2" />
-                        <p className="text-white font-medium">Cryptocurrency</p>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Asset Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">Asset</label>
-                    <select
-                      value={depositAsset}
-                      onChange={(e) => setDepositAsset(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
-                      required
-                    >
-                      {depositMethod === 'wire' ? (
-                        <option value="USD">USD (US Dollar)</option>
-                      ) : (
-                        <>
-                          <option value="BTC">BTC (Bitcoin)</option>
-                          <option value="ETH">ETH (Ethereum)</option>
-                          <option value="USDT">USDT (Tether)</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-
-                  {/* Amount */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">Amount *</label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="number"
-                        value={depositAmount}
-                        onChange={(e) => setDepositAmount(e.target.value)}
-                        placeholder="0.00"
-                        min="10"
-                        step="0.01"
-                        className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
-                        required
-                      />
-                    </div>
-                    <p className="text-gray-400 text-sm mt-2">Minimum deposit: $10.00</p>
-                  </div>
-
-                  {/* Wire Transfer Details */}
-                  {depositMethod === 'wire' && (
-                    <div className="p-6 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                      <h3 className="font-medium text-white mb-4">Wire Transfer Instructions</h3>
-                      <div className="space-y-3">
-                        {Object.entries(WIRE_TRANSFER_DETAILS).map(([key, value]) => (
-                          <div key={key} className="flex justify-between items-center p-3 rounded-lg bg-white/5">
-                            <span className="text-gray-400 text-sm capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-white font-medium">{value}</span>
-                              <button
-                                type="button"
-                                onClick={() => copyToClipboard(value)}
-                                className="p-1 hover:bg-white/10 rounded"
-                              >
-                                <Copy className="w-4 h-4 text-gray-400" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Crypto Wallet Address */}
-                  {depositMethod === 'crypto' && (
-                    <div className="p-6 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                      <h3 className="font-medium text-white mb-4">Deposit Address</h3>
-                      <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-gray-400 text-sm">Wallet Address</span>
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(DEMO_WALLETS[depositAsset as keyof typeof DEMO_WALLETS])}
-                            className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-400 text-sm"
-                          >
-                            <Copy className="w-4 h-4" />
-                            <span>Copy</span>
-                          </button>
-                        </div>
-                        <p className="text-white font-mono text-sm break-all">
-                          {DEMO_WALLETS[depositAsset as keyof typeof DEMO_WALLETS]}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Payment Proof Upload */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Payment Proof {depositMethod === 'wire' && '*'}
-                    </label>
-                    <div className="border-2 border-dashed border-white/10 rounded-xl p-6 text-center">
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                        id="payment-proof"
-                        required={depositMethod === 'wire'}
-                      />
-                      <label htmlFor="payment-proof" className="cursor-pointer">
-                        {paymentProofPreview ? (
-                          <div>
-                            <img 
-                              src={paymentProofPreview} 
-                              alt="Preview" 
-                              className="max-w-full h-48 object-contain mx-auto rounded-lg mb-3"
-                            />
-                            <p className="text-green-400 text-sm">File uploaded</p>
-                          </div>
-                        ) : (
-                          <div>
-                            <Upload className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                            <p className="text-white font-medium mb-1">Click to upload</p>
-                            <p className="text-gray-400 text-sm">PNG, JPG, PDF up to 5MB</p>
-                          </div>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Submit Button */}
-                  <button
-                    type="submit"
-                    disabled={depositLoading}
-                    className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:shadow-lg disabled:opacity-50 flex items-center justify-center space-x-2"
-                  >
-                    {depositLoading ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Processing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-5 h-5" />
-                        <span>Submit Deposit</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-              </div>
+          {selectedTab === 'deposit' && (
+            <motion.div
+              key="deposit"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <Deposit />
             </motion.div>
           )}
 
@@ -1256,7 +913,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-white">
-                            {tx.type === 'deposit' ? '+' : '-'}{formatCurrency(Number(tx.amount))}
+                            {tx.type === 'deposit' ? '+' : '-'}{formatCurrency(Number(tx.value_usd || tx.amount))}
                           </p>
                           {getStatusBadge(tx.status)}
                         </div>
