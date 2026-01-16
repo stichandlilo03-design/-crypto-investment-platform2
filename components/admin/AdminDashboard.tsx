@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { supabase } from '@/lib/supabase/client'
+import { getCryptoPrices } from '@/lib/api/coingecko'
 import { useRouter } from 'next/navigation'
 
 interface Transaction {
@@ -49,8 +50,9 @@ interface UserBalance {
 }
 
 interface CryptoPrice {
-  usd: number
-  usd_24h_change: number
+  price: number
+  change24h: number
+  marketCap?: number
 }
 
 interface CryptoPrices {
@@ -103,24 +105,24 @@ export default function AdminDashboard() {
 
   const fetchPrices = async () => {
     try {
-      const response = await fetch(
-        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether&vs_currencies=usd&include_24hr_change=true'
-      )
-      const data = await response.json()
+      // Use your existing API route
+      const prices = await getCryptoPrices(['BTC', 'ETH', 'USDT', 'SOL', 'ADA', 'BNB', 'XRP', 'DOGE'])
       
-      setCryptoPrices({
-        BTC: data.bitcoin || { usd: 42000, usd_24h_change: 0 },
-        ETH: data.ethereum || { usd: 3300, usd_24h_change: 0 },
-        USDT: data.tether || { usd: 1, usd_24h_change: 0 },
-        USD: { usd: 1, usd_24h_change: 0 }
-      })
+      // Add USD (1:1 conversion)
+      const pricesWithUSD = {
+        ...prices,
+        USD: { price: 1, change24h: 0, marketCap: 0 }
+      }
+      
+      setCryptoPrices(pricesWithUSD)
+      console.log('Admin fetched prices from API:', pricesWithUSD)
     } catch (error) {
       console.error('Error fetching prices:', error)
       setCryptoPrices({
-        BTC: { usd: 42000, usd_24h_change: 0 },
-        ETH: { usd: 3300, usd_24h_change: 0 },
-        USDT: { usd: 1, usd_24h_change: 0 },
-        USD: { usd: 1, usd_24h_change: 0 }
+        BTC: { price: 42000, change24h: 0 },
+        ETH: { price: 3300, change24h: 0 },
+        USDT: { price: 1, change24h: 0 },
+        USD: { price: 1, change24h: 0 }
       })
     }
   }
@@ -308,6 +310,29 @@ export default function AdminDashboard() {
         return
       }
 
+      // ✅ Validation: Check for valid amounts
+      const cryptoAmount = Number(transaction.amount)
+      const usdValue = Number(transaction.value_usd)
+
+      if (!cryptoAmount || cryptoAmount <= 0) {
+        alert('Error: Invalid crypto amount in transaction')
+        return
+      }
+
+      if (!usdValue || usdValue <= 0) {
+        alert('Error: Invalid USD value in transaction')
+        return
+      }
+
+      console.log('Approving transaction:', {
+        id: transaction.id,
+        asset: transaction.asset,
+        cryptoAmount,
+        usdValue,
+        pricePerCoin: usdValue / cryptoAmount
+      })
+
+      // ✅ Step 1: Update transaction status
       const { error: updateError } = await supabase
         .from('transactions')
         .update({
@@ -322,6 +347,7 @@ export default function AdminDashboard() {
         return
       }
 
+      // ✅ Step 2: Get current balance
       const { data: currentBalance } = await supabase
         .from('user_balances')
         .select('*')
@@ -333,32 +359,37 @@ export default function AdminDashboard() {
       let newAvgPrice = 0
 
       if (currentBalance) {
+        // User already has this asset - calculate weighted average
         const existingAmount = Number(currentBalance.amount)
         const existingAvgPrice = Number(currentBalance.average_buy_price)
-        const newDepositAmount = Number(transaction.amount)
-        const newDepositPrice = Number(transaction.value_usd) / newDepositAmount
+        const newDepositAmount = cryptoAmount
+        const newDepositPrice = usdValue / cryptoAmount
 
+        // Total amount after deposit
         newAmount = existingAmount + newDepositAmount
 
+        // Weighted average price
         const existingValue = existingAmount * existingAvgPrice
         const newValue = newDepositAmount * newDepositPrice
         newAvgPrice = (existingValue + newValue) / newAmount
 
-        console.log('Balance update:', {
-          existingAmount,
-          existingAvgPrice,
-          existingValue,
-          newDepositAmount,
-          newDepositPrice,
-          newValue,
-          newAmount,
-          newAvgPrice
+        console.log('Balance calculation:', {
+          existing: { amount: existingAmount, price: existingAvgPrice, value: existingValue },
+          new: { amount: newDepositAmount, price: newDepositPrice, value: newValue },
+          result: { amount: newAmount, avgPrice: newAvgPrice }
         })
       } else {
-        newAmount = Number(transaction.amount)
-        newAvgPrice = Number(transaction.value_usd) / newAmount
+        // First deposit of this asset
+        newAmount = cryptoAmount
+        newAvgPrice = usdValue / cryptoAmount
+        
+        console.log('First deposit:', {
+          amount: newAmount,
+          price: newAvgPrice
+        })
       }
 
+      // ✅ Step 3: UPSERT user balance
       const { error: balanceError } = await supabase
         .from('user_balances')
         .upsert(
@@ -376,6 +407,7 @@ export default function AdminDashboard() {
 
       if (balanceError) {
         console.error('Balance update error:', balanceError)
+        // Rollback
         await supabase
           .from('transactions')
           .update({ status: 'pending' })
@@ -385,22 +417,28 @@ export default function AdminDashboard() {
         return
       }
 
+      // ✅ Step 4: Send notification
       await supabase
         .from('notifications')
         .insert({
           user_id: transaction.user_id,
           type: transaction.type,
           title: `${transaction.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Approved`,
-          message: `Your ${transaction.type} of $${transaction.value_usd || transaction.amount} (${transaction.amount} ${transaction.asset}) has been approved and added to your account.`,
+          message: `Your ${transaction.type} of $${usdValue.toFixed(2)} (${cryptoAmount.toFixed(8)} ${transaction.asset}) has been approved and added to your account.`,
           read: false
         })
 
       alert(`✅ Transaction approved successfully!
 
-USD Amount: $${transaction.value_usd}
-Crypto Amount: ${transaction.amount} ${transaction.asset}
-New Total Balance: ${newAmount} ${transaction.asset}
-Average Buy Price: $${newAvgPrice.toFixed(2)}`)
+USD Amount: $${usdValue.toFixed(2)}
+${transaction.asset} Amount: ${cryptoAmount.toFixed(8)}
+New Total Balance: ${newAmount.toFixed(8)} ${transaction.asset}
+Average Buy Price: $${newAvgPrice.toFixed(2)}
+
+This means:
+• User deposited: $${usdValue.toFixed(2)}
+• User received: ${cryptoAmount.toFixed(8)} ${transaction.asset}
+• Price at deposit: $${(usdValue / cryptoAmount).toFixed(2)} per ${transaction.asset}`)
       
       setSelectedAction(null)
       setAdminNotes('')
@@ -479,11 +517,19 @@ Average Buy Price: $${newAvgPrice.toFixed(2)}`)
 
       const currentAmount = currentBalance?.amount || 0
       
-      // ✅ For crypto assets, convert USD to crypto amount
+      // ✅ For crypto assets, convert USD to crypto amount using market rate
       let cryptoAdjustmentAmount = adjustmentValue
       if (adjustmentAsset !== 'USD') {
-        const currentPrice = cryptoPrices[adjustmentAsset]?.usd || 1
+        const priceData = cryptoPrices[adjustmentAsset]
+        const currentPrice = priceData?.price || 1
         cryptoAdjustmentAmount = adjustmentValue / currentPrice
+        
+        console.log('Admin adjustment conversion:', {
+          usdAmount: adjustmentValue,
+          asset: adjustmentAsset,
+          marketPrice: currentPrice,
+          cryptoAmount: cryptoAdjustmentAmount
+        })
       }
 
       const newAmount = adjustmentType === 'add' 
@@ -1267,7 +1313,7 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
                 </select>
                 {adjustmentAsset !== 'USD' && (
                   <p className="text-xs text-gray-400 mt-1">
-                    Current {adjustmentAsset} price: ${cryptoPrices[adjustmentAsset]?.usd.toLocaleString() || 'Loading...'}
+                    Current {adjustmentAsset} price: ${cryptoPrices[adjustmentAsset]?.price.toLocaleString() || 'Loading...'}
                   </p>
                 )}
               </div>
@@ -1286,7 +1332,7 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
                 />
                 {adjustmentAmount && adjustmentAsset !== 'USD' && (
                   <p className="text-xs text-green-400 mt-1">
-                    ≈ {(Number(adjustmentAmount) / (cryptoPrices[adjustmentAsset]?.usd || 1)).toFixed(8)} {adjustmentAsset}
+                    ≈ {(Number(adjustmentAmount) / (cryptoPrices[adjustmentAsset]?.price || 1)).toFixed(8)} {adjustmentAsset}
                   </p>
                 )}
               </div>
