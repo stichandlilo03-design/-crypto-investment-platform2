@@ -14,6 +14,7 @@ import { useState, useEffect } from 'react'
 import PortfolioOverview from '@/components/PortfolioOverview'
 import SwapComponent from '@/components/SwapComponent'
 import Deposit from '@/components/Deposit'
+import TawkToChat from '@/components/TawkToChat'
 
 // Types
 interface CryptoPrice {
@@ -1248,6 +1249,9 @@ export default function DashboardPage() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* ✅ Tawk.to Customer Support Chat */}
+      <TawkToChat />
     </div>
   )
 }
