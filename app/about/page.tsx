@@ -399,8 +399,8 @@ export default function AboutPage() {
               <div className="glass-effect rounded-xl p-6">
                 <Phone className="w-8 h-8 text-purple-400 mx-auto mb-3" />
                 <h3 className="font-bold text-white mb-2">Call Us</h3>
-                <a href="tel:+15551234567" className="text-gray-400 hover:text-purple-400 transition">
-                  +1 (555) 123-4567
+                <a href="tel:+18036301295" className="text-gray-400 hover:text-purple-400 transition">
+                  +1 (803) 630-1295
                 </a>
               </div>
 
@@ -408,7 +408,7 @@ export default function AboutPage() {
                 <MapPin className="w-8 h-8 text-purple-400 mx-auto mb-3" />
                 <h3 className="font-bold text-white mb-2">Visit Us</h3>
                 <p className="text-gray-400">
-                  123 Crypto Street<br />
+                  1 Dr Carlton B Goodlett Pl<br />
                   San Francisco, CA 94102
                 </p>
               </div>
@@ -435,7 +435,7 @@ export default function AboutPage() {
             <span className="text-xl font-display font-bold text-white">CryptoVault</span>
           </div>
           <p className="text-gray-400 text-sm">
-            &copy; 2016 - 2024 CryptoVault. All rights reserved.
+            &copy; 2016 - 2026 CryptoVault. All rights reserved.
           </p>
         </div>
       </footer>
