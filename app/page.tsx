@@ -140,7 +140,7 @@ export default function HomePage() {
             <div className="hidden md:flex items-center space-x-6 lg:space-x-8">
               <a href="#features" className="text-sm lg:text-base text-gray-300 hover:text-white transition">Features</a>
               <a href="#testimonials" className="text-sm lg:text-base text-gray-300 hover:text-white transition">Testimonials</a>
-              <a href="#about" className="text-sm lg:text-base text-gray-300 hover:text-white transition">About</a>
+              <a href="about" className="text-sm lg:text-base text-gray-300 hover:text-white transition">About</a>
               {isAuthenticated ? (
                 <Link 
                   href="/dashboard"
