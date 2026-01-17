@@ -356,31 +356,67 @@ export default function AdminDashboard() {
       let newAmount = 0
       let newAvgPrice = 0
 
-      if (currentBalance) {
+      // ✅ Handle DEPOSIT vs WITHDRAWAL differently
+      if (transaction.type === 'deposit') {
+        // DEPOSIT: Add to balance
+        if (currentBalance) {
+          const existingAmount = Number(currentBalance.amount)
+          const existingAvgPrice = Number(currentBalance.average_buy_price)
+          const depositAmount = cryptoAmount
+          const depositPrice = usdValue / cryptoAmount
+
+          newAmount = existingAmount + depositAmount
+
+          const existingValue = existingAmount * existingAvgPrice
+          const newValue = depositAmount * depositPrice
+          newAvgPrice = (existingValue + newValue) / newAmount
+
+          console.log('✅ DEPOSIT - Balance calculation:', {
+            existing: { amount: existingAmount, price: existingAvgPrice, value: existingValue },
+            deposit: { amount: depositAmount, price: depositPrice, value: newValue },
+            result: { amount: newAmount, avgPrice: newAvgPrice }
+          })
+        } else {
+          newAmount = cryptoAmount
+          newAvgPrice = usdValue / cryptoAmount
+          
+          console.log('✅ DEPOSIT - First deposit:', {
+            amount: newAmount,
+            price: newAvgPrice
+          })
+        }
+      } else if (transaction.type === 'withdraw') {
+        // WITHDRAWAL: Subtract from balance
+        if (!currentBalance) {
+          alert('❌ Error: User has no balance for this asset')
+          await supabase.from('transactions').update({ status: 'pending' }).eq('id', id)
+          return
+        }
+
         const existingAmount = Number(currentBalance.amount)
         const existingAvgPrice = Number(currentBalance.average_buy_price)
-        const newDepositAmount = cryptoAmount
-        const newDepositPrice = usdValue / cryptoAmount
 
-        newAmount = existingAmount + newDepositAmount
+        // Check if user has enough balance
+        if (existingAmount < cryptoAmount) {
+          alert(`❌ Error: Insufficient balance
+          
+User has: ${existingAmount.toFixed(8)} ${transaction.asset}
+Trying to withdraw: ${cryptoAmount.toFixed(8)} ${transaction.asset}`)
+          await supabase.from('transactions').update({ status: 'pending' }).eq('id', id)
+          return
+        }
 
-        const existingValue = existingAmount * existingAvgPrice
-        const newValue = newDepositAmount * newDepositPrice
-        newAvgPrice = (existingValue + newValue) / newAmount
+        newAmount = existingAmount - cryptoAmount
+        newAvgPrice = existingAvgPrice // Keep same average price
 
-        console.log('Balance calculation:', {
-          existing: { amount: existingAmount, price: existingAvgPrice, value: existingValue },
-          new: { amount: newDepositAmount, price: newDepositPrice, value: newValue },
+        console.log('✅ WITHDRAWAL - Balance calculation:', {
+          existing: { amount: existingAmount, price: existingAvgPrice },
+          withdraw: { amount: cryptoAmount },
           result: { amount: newAmount, avgPrice: newAvgPrice }
         })
       } else {
-        newAmount = cryptoAmount
-        newAvgPrice = usdValue / cryptoAmount
-        
-        console.log('First deposit:', {
-          amount: newAmount,
-          price: newAvgPrice
-        })
+        alert('❌ Error: Unknown transaction type')
+        return
       }
 
       const { error: balanceError } = await supabase
