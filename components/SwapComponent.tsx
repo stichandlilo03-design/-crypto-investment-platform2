@@ -17,6 +17,7 @@ export default function SwapComponent() {
   const [userBalances, setUserBalances] = useState<any[]>([])
   const [pricesLoading, setPricesLoading] = useState(true)
 
+  // ✅ Updated to include all coins from Deposit component
   const assets = [
     { symbol: 'USD', name: 'US Dollar' },
     { symbol: 'BTC', name: 'Bitcoin' },
@@ -24,7 +25,9 @@ export default function SwapComponent() {
     { symbol: 'USDT', name: 'Tether' },
     { symbol: 'SOL', name: 'Solana' },
     { symbol: 'ADA', name: 'Cardano' },
-    { symbol: 'BNB', name: 'BNB' }
+    { symbol: 'BNB', name: 'Binance Coin' },
+    { symbol: 'XRP', name: 'Ripple' },
+    { symbol: 'DOGE', name: 'Dogecoin' }
   ]
 
   useEffect(() => {
@@ -58,7 +61,8 @@ export default function SwapComponent() {
 
   const fetchPrices = async () => {
     try {
-      const response = await fetch('/api/crypto-prices?symbols=BTC,ETH,USDT,SOL,ADA,BNB,USD')
+      // ✅ Fetch all coins including XRP and DOGE
+      const response = await fetch('/api/crypto-prices?symbols=BTC,ETH,USDT,SOL,ADA,BNB,XRP,DOGE,USD')
       const data = await response.json()
       
       if (data.success) {
@@ -72,12 +76,17 @@ export default function SwapComponent() {
       setPricesLoading(false)
     } catch (error) {
       console.error('Error fetching prices:', error)
-      // Fallback with USD
+      // Fallback prices with all coins
       setCryptoPrices({
         USD: { price: 1, change24h: 0 },
         BTC: { price: 95000, change24h: 2.5 },
         ETH: { price: 3300, change24h: 1.8 },
-        USDT: { price: 1, change24h: 0 }
+        USDT: { price: 1, change24h: 0 },
+        SOL: { price: 145, change24h: 3.2 },
+        ADA: { price: 0.85, change24h: 1.5 },
+        BNB: { price: 610, change24h: 2.1 },
+        XRP: { price: 2.15, change24h: 4.2 },
+        DOGE: { price: 0.32, change24h: 5.8 }
       })
       setPricesLoading(false)
     }
