@@ -150,7 +150,7 @@ export default function SwapComponent() {
         usdValue
       })
 
-      // ✅ CREATE SWAP TRANSACTION WITH ALL REQUIRED FIELDS
+      // ✅ CREATE SWAP TRANSACTION - ONLY REQUIRED COLUMNS
       const { error: swapError } = await supabase
         .from('swap_transactions')
         .insert({
@@ -159,8 +159,6 @@ export default function SwapComponent() {
           to_asset: toAsset,
           from_amount: fromAmountNum,      // ✅ NOT NULL
           to_amount: toAmountNum,          // ✅ NOT NULL
-          from_price: fromPrice,
-          to_price: toPrice,
           value_usd: usdValue,
           status: 'pending'
         })
