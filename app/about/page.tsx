@@ -28,9 +28,9 @@ export default function AboutPage() {
       name: "Michael Anderson",
       role: "Chief Executive Officer (CEO)",
       bio: "15+ years in blockchain technology and financial services. Former Goldman Sachs executive who pioneered digital asset management strategies.",
-      email: "michael.anderson@cryptovault.com",
+      email: "michael.anderson@cryptovaultnew.sbs",
       phone: "+1 (555) 123-4567",
-      image: "https://randomuser.me/api/portraits/men/32.jpg", // Replace with your image URL
+      image: "https://image2url.com/r2/default/images/1768677830595-fc011237-fdcc-414f-a83d-620bd09d498a.jpg", // Replace with your image URL
       linkedin: "https://linkedin.com/in/michael-anderson",
       twitter: "https://twitter.com/m_anderson"
     },
