@@ -6,7 +6,7 @@ import {
   Users, Shield, AlertCircle, CheckCircle, Bell, LogOut, 
   BarChart3, FileText, Clock, Check, X, Menu, Upload, Loader2, 
   Home, CreditCard, UserCheck, RefreshCw, Download, Settings, DollarSign,
-  Plus, Minus, TrendingUp, TrendingDown, Wallet
+  Plus, Minus, TrendingUp, TrendingDown, Wallet, Eye, ArrowDownRight, ArrowUpRight
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { supabase } from '@/lib/supabase/client'
@@ -95,6 +95,14 @@ export default function AdminDashboard() {
   const [adjustmentReason, setAdjustmentReason] = useState('')
   const [processingAdjustment, setProcessingAdjustment] = useState(false)
   const [pricesLoading, setPricesLoading] = useState(true)
+  
+  // ✅ View as User Feature
+  const [viewAsUserModal, setViewAsUserModal] = useState(false)
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null)
+  const [viewingUserData, setViewingUserData] = useState<any>(null)
+  const [viewingUserBalances, setViewingUserBalances] = useState<any[]>([])
+  const [viewingUserTransactions, setViewingUserTransactions] = useState<any[]>([])
+  const [loadingUserView, setLoadingUserView] = useState(false)
   
   const router = useRouter()
 
@@ -512,6 +520,56 @@ Average Buy Price: $${newAvgPrice.toFixed(2)}`)
       console.error('Rejection error:', error)
       alert('Failed to reject. Please try again.')
     }
+  }
+
+  const handleViewAsUser = async (userId: string) => {
+    setLoadingUserView(true)
+    setViewAsUserModal(true)
+    setViewingUserId(userId)
+    
+    try {
+      // Fetch user profile
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      
+      setViewingUserData(userProfile)
+      
+      // Fetch user balances
+      const { data: balances } = await supabase
+        .from('user_balances')
+        .select('*')
+        .eq('user_id', userId)
+      
+      setViewingUserBalances(balances || [])
+      
+      // Fetch user transactions
+      const { data: transactions } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      
+      setViewingUserTransactions(transactions || [])
+      
+    } catch (error) {
+      console.error('Error fetching user data:', error)
+      alert('Failed to load user data')
+    } finally {
+      setLoadingUserView(false)
+    }
+  }
+
+  const calculateUserTotalBalance = () => {
+    if (!viewingUserBalances.length) return 0
+    
+    return viewingUserBalances.reduce((total, balance) => {
+      const assetPrice = cryptoPrices[balance.asset]?.price || 1
+      return total + (Number(balance.amount) * assetPrice)
+    }, 0)
   }
 
   const handleBalanceAdjustment = async () => {
@@ -938,15 +996,24 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
                     {formatTimeAgo(user.created_at)}
                   </td>
                   <td className="py-4 px-4">
-                    <button
-                      onClick={() => {
-                        setSelectedUser(user.id)
-                        setBalanceManagerModal(true)
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 text-sm font-medium transition-all"
-                    >
-                      Adjust Balance
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleViewAsUser(user.id)}
+                        className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 text-sm font-medium transition-all flex items-center space-x-1"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>View Account</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedUser(user.id)
+                          setBalanceManagerModal(true)
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 text-sm font-medium transition-all"
+                      >
+                        Adjust Balance
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1470,6 +1537,242 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
                 )}
               </button>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ✅ VIEW AS USER MODAL */}
+      {viewAsUserModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} 
+            animate={{ opacity: 1, scale: 1 }} 
+            className="glass-effect rounded-2xl p-6 max-w-5xl w-full my-8 max-h-[90vh] overflow-y-auto"
+          >
+            {loadingUserView ? (
+              <div className="text-center py-12">
+                <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
+                <p className="text-gray-400">Loading user account...</p>
+              </div>
+            ) : (
+              <>
+                {/* Header */}
+                <div className="flex items-start justify-between mb-6 pb-6 border-b border-white/10">
+                  <div>
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                        <span className="text-white font-bold text-lg">
+                          {viewingUserData?.full_name?.charAt(0) || 'U'}
+                        </span>
+                      </div>
+                      <div>
+                        <h3 className="text-2xl font-bold text-white">
+                          {viewingUserData?.full_name || 'Unknown User'}
+                        </h3>
+                        <p className="text-gray-400">{viewingUserData?.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4 text-sm">
+                      <span className={`px-3 py-1 rounded-full ${
+                        viewingUserData?.role === 'admin' 
+                          ? 'bg-red-500/20 text-red-400' 
+                          : 'bg-blue-500/20 text-blue-400'
+                      }`}>
+                        {viewingUserData?.role || 'user'}
+                      </span>
+                      <span className={`px-3 py-1 rounded-full ${
+                        viewingUserData?.kyc_verified 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-yellow-500/20 text-yellow-400'
+                      }`}>
+                        {viewingUserData?.kyc_verified ? 'KYC Verified' : 'KYC Pending'}
+                      </span>
+                      <span className={`px-3 py-1 rounded-full ${
+                        viewingUserData?.is_active 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {viewingUserData?.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setViewAsUserModal(false)
+                      setViewingUserId(null)
+                      setViewingUserData(null)
+                      setViewingUserBalances([])
+                      setViewingUserTransactions([])
+                    }}
+                    className="p-2 rounded-xl hover:bg-white/10 transition-all"
+                  >
+                    <X className="w-6 h-6 text-white" />
+                  </button>
+                </div>
+
+                {/* Total Balance Card */}
+                <div className="mb-6 p-6 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-400 text-sm mb-1">Total Portfolio Value</p>
+                      <h2 className="text-4xl font-bold text-white">
+                        ${calculateUserTotalBalance().toLocaleString(undefined, { 
+                          minimumFractionDigits: 2, 
+                          maximumFractionDigits: 2 
+                        })}
+                      </h2>
+                    </div>
+                    <Wallet className="w-12 h-12 text-purple-400" />
+                  </div>
+                </div>
+
+                {/* User's Portfolio */}
+                <div className="mb-6">
+                  <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                    <Wallet className="w-5 h-5 mr-2 text-purple-400" />
+                    Portfolio ({viewingUserBalances.length} assets)
+                  </h3>
+                  
+                  {viewingUserBalances.length === 0 ? (
+                    <div className="text-center py-8 glass-effect rounded-xl">
+                      <Wallet className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                      <p className="text-gray-400">No assets yet</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {viewingUserBalances.map((balance, index) => {
+                        const assetPrice = cryptoPrices[balance.asset]?.price || 1
+                        const usdValue = Number(balance.amount) * assetPrice
+                        const change24h = cryptoPrices[balance.asset]?.change24h || 0
+                        
+                        return (
+                          <div key={`${balance.asset}-${index}`} className="glass-effect rounded-xl p-4 border border-white/10">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400 font-bold">
+                                {balance.asset}
+                              </span>
+                              <span className={`text-xs font-medium ${
+                                change24h >= 0 ? 'text-green-400' : 'text-red-400'
+                              }`}>
+                                {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}%
+                              </span>
+                            </div>
+                            <div className="mb-2">
+                              <p className="text-2xl font-bold text-white">
+                                {Number(balance.amount).toFixed(8)}
+                              </p>
+                              <p className="text-sm text-gray-400">{balance.asset}</p>
+                            </div>
+                            <div className="pt-3 border-t border-white/10">
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-gray-400">USD Value:</span>
+                                <span className="text-white font-bold">
+                                  ${usdValue.toLocaleString(undefined, { 
+                                    minimumFractionDigits: 2, 
+                                    maximumFractionDigits: 2 
+                                  })}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center mt-1">
+                                <span className="text-xs text-gray-400">Avg Buy Price:</span>
+                                <span className="text-gray-300 text-xs">
+                                  ${Number(balance.average_buy_price).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent Transactions */}
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                    <Clock className="w-5 h-5 mr-2 text-blue-400" />
+                    Recent Transactions ({viewingUserTransactions.length})
+                  </h3>
+                  
+                  {viewingUserTransactions.length === 0 ? (
+                    <div className="text-center py-8 glass-effect rounded-xl">
+                      <FileText className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                      <p className="text-gray-400">No transactions yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {viewingUserTransactions.map((tx) => (
+                        <div 
+                          key={tx.id} 
+                          className="flex items-center justify-between p-4 rounded-xl glass-effect hover:bg-white/5 transition-all"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              tx.type === 'deposit' ? 'bg-green-500/20' : 'bg-red-500/20'
+                            }`}>
+                              {tx.type === 'deposit' ? (
+                                <ArrowDownRight className="w-5 h-5 text-green-400" />
+                              ) : (
+                                <ArrowUpRight className="w-5 h-5 text-red-400" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-white font-medium capitalize">{tx.type}</p>
+                              <p className="text-gray-400 text-sm">
+                                {formatTimeAgo(tx.created_at)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-white font-bold">
+                              {tx.type === 'deposit' ? '+' : '-'}${(tx.value_usd || tx.amount).toFixed(2)}
+                            </p>
+                            <p className="text-gray-400 text-sm">
+                              {tx.amount} {tx.asset}
+                            </p>
+                            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs ${
+                              tx.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                              tx.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                              tx.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                              'bg-blue-500/20 text-blue-400'
+                            }`}>
+                              {tx.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end space-x-3 mt-6 pt-6 border-t border-white/10">
+                  <button
+                    onClick={() => {
+                      setViewAsUserModal(false)
+                      setSelectedUser(viewingUserId || '')
+                      setBalanceManagerModal(true)
+                    }}
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium hover:opacity-90 transition-all flex items-center space-x-2"
+                  >
+                    <DollarSign className="w-5 h-5" />
+                    <span>Adjust Balance</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setViewAsUserModal(false)
+                      setViewingUserId(null)
+                      setViewingUserData(null)
+                      setViewingUserBalances([])
+                      setViewingUserTransactions([])
+                    }}
+                    className="px-6 py-3 rounded-xl glass-effect hover:bg-white/10 text-white transition-all"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
           </motion.div>
         </div>
       )}
