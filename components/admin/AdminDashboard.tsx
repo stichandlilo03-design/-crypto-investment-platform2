@@ -702,7 +702,7 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
                     <td className="py-4 px-4">
                       {transaction.type === 'deposit' ? (
                         transaction.payment_proof_url ? (
-                          
+                          <a
                             href={transaction.payment_proof_url}
                             target="_blank"
                             rel="noopener noreferrer"
