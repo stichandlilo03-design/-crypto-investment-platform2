@@ -347,21 +347,22 @@ export default function Deposit() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">Amount (USD)</label>
-            <div className="relative">
-              <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6">
-                <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-              </div>
-              <input
-                type="number"
-                value={usdAmount}
-                onChange={(e) => setUsdAmount(e.target.value)}
-                placeholder={selectedAsset === 'USD' ? '500.00' : '250.00'}
-                min={selectedAsset === 'USD' ? MIN_DEPOSIT.USD : MIN_DEPOSIT.CRYPTO}
-                step="0.01"
-                className="w-full pl-11 sm:pl-14 pr-3 sm:pr-4 py-2.5 sm:py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm sm:text-base focus:outline-none focus:border-green-500"
-              />
-            </div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              <span className="flex items-center">
+                <DollarSign className="w-4 h-4 mr-1 text-gray-400" />
+                Amount (USD)
+              </span>
+            </label>
+            <input
+              type="number"
+              value={usdAmount}
+              onChange={(e) => setUsdAmount(e.target.value)}
+              placeholder={selectedAsset === 'USD' ? '500.00' : '250.00'}
+              min={selectedAsset === 'USD' ? MIN_DEPOSIT.USD : MIN_DEPOSIT.CRYPTO}
+              step="0.01"
+              className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm sm:text-base focus:outline-none focus:border-green-500"
+            />
+          </div>
             
             {!pricesLoading && selectedAsset !== 'USD' && parseFloat(usdAmount) > 0 && (
               <div className="mt-3 p-3 sm:p-4 rounded-lg bg-green-500/10 border border-green-500/20">
