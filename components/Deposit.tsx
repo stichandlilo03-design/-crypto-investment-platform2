@@ -50,13 +50,13 @@ const CRYPTO_WALLETS = {
 }
 
 const BANK_INFO = {
-  bankName: 'Sofi Bank',
+  bankName: 'SoFi Bank, N.A',
   accountName: 'CryptoVault Holdings LLC',
-  accountNumber: '1234567890',
-  routingNumber: '021000021',
-  swiftCode: 'CHASUS33',
-  iban: 'US12 BANK 0000 1234 5678 90',
-  bankAddress: '270 Park Avenue, New York, NY 10017, USA'
+  accountNumber: '411057385910',
+  routingNumber: '031101334',
+  swiftCode: 'SOFIUS44',
+  iban: 'NULL',
+  bankAddress: '234 1st Street, San Francisco, CA 94105, USA'
 }
 
 const MIN_DEPOSIT = {
