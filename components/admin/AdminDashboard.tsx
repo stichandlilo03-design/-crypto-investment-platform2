@@ -94,6 +94,7 @@ export default function AdminDashboard() {
   const [adjustmentAmount, setAdjustmentAmount] = useState('')
   const [adjustmentReason, setAdjustmentReason] = useState('')
   const [processingAdjustment, setProcessingAdjustment] = useState(false)
+  const [pricesLoading, setPricesLoading] = useState(true)
   
   const router = useRouter()
 
@@ -104,6 +105,7 @@ export default function AdminDashboard() {
 
   const fetchPrices = async () => {
     try {
+      setPricesLoading(true)
       const prices = await getCryptoPrices(['BTC', 'ETH', 'USDT', 'SOL', 'ADA', 'BNB', 'XRP', 'DOGE'])
       
       const pricesWithUSD = {
@@ -121,6 +123,8 @@ export default function AdminDashboard() {
         USDT: { price: 1, change24h: 0 },
         USD: { price: 1, change24h: 0 }
       })
+    } finally {
+      setPricesLoading(false)
     }
   }
 
@@ -1277,7 +1281,14 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
                   <option value="DOGE">DOGE (Dogecoin)</option>
                 </select>
                 
-                {adjustmentAsset !== 'USD' && cryptoPrices[adjustmentAsset] && (
+                {pricesLoading ? (
+                  <div className="mt-2 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                    <div className="flex items-center justify-center space-x-2">
+                      <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                      <span className="text-sm text-purple-400">Loading price data...</span>
+                    </div>
+                  </div>
+                ) : adjustmentAsset !== 'USD' && cryptoPrices[adjustmentAsset] ? (
                   <div className="mt-2 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-400">Current {adjustmentAsset} Price:</span>
@@ -1298,7 +1309,7 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
                       </span>
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
 
               <div>
@@ -1317,7 +1328,7 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
                   />
                 </div>
                 
-                {adjustmentAmount && Number(adjustmentAmount) > 0 && (
+                {adjustmentAmount && Number(adjustmentAmount) > 0 && !pricesLoading && (
                   <div className="mt-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
                     <p className="text-sm text-blue-400 mb-2">💰 Conversion Preview:</p>
                     <div className="space-y-2">
