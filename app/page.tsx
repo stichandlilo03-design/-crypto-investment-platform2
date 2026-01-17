@@ -18,6 +18,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import DemoVideoModal from '@/components/DemoVideoModal'
 
 export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -242,9 +243,13 @@ export default function HomePage() {
                     <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </Link>
                 )}
-                <button className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl glass-effect text-white font-semibold text-base sm:text-lg hover:bg-white/10 transition-all">
-                  Watch Demo
-                </button>
+                
+                {/* ✅ DEMO VIDEO BUTTON */}
+                <DemoVideoModal 
+                  videoUrl="https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+                  buttonText="Watch Demo"
+                  buttonClassName="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl glass-effect text-white font-semibold text-base sm:text-lg hover:bg-white/10 transition-all flex items-center justify-center space-x-2"
+                />
               </div>
             </motion.div>
 
@@ -364,6 +369,49 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ✅ DEMO VIDEO SHOWCASE SECTION */}
+      <section className="py-12 sm:py-20 px-4 sm:px-6 bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+        <div className="max-w-6xl mx-auto text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold text-white mb-4">
+              See CryptoVault In Action
+            </h2>
+            <p className="text-base sm:text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
+              Watch how easy it is to manage your crypto portfolio with our intuitive platform
+            </p>
+
+            {/* Large Demo Video Button */}
+            <div className="inline-block mb-8">
+              <DemoVideoModal 
+                videoUrl="https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+                buttonText="🎥 Watch Full Demo"
+                buttonClassName="px-8 sm:px-12 py-4 sm:py-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl text-white text-lg sm:text-xl font-bold hover:shadow-2xl hover:shadow-purple-500/50 transition-all flex items-center space-x-3"
+              />
+            </div>
+
+            {/* Video Features */}
+            <div className="grid sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-white mb-2">3 Min</div>
+                <div className="text-sm text-gray-400">Quick Overview</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-white mb-2">HD Quality</div>
+                <div className="text-sm text-gray-400">Crystal Clear</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-white mb-2">Step-by-Step</div>
+                <div className="text-sm text-gray-400">Easy to Follow</div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Testimonials Section */}
       <section id="testimonials" className="py-12 sm:py-20 px-4 sm:px-6 bg-black/20">
         <div className="max-w-7xl mx-auto">
@@ -429,23 +477,32 @@ export default function HomePage() {
             <p className="text-base sm:text-xl text-white/90 mb-6 sm:mb-8 max-w-2xl mx-auto">
               Join thousands of investors who are already building their wealth with CryptoVault
             </p>
-            {isAuthenticated ? (
-              <Link 
-                href="/dashboard"
-                className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white text-purple-600 font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all"
-              >
-                Go to Dashboard
-                <ArrowRight className="ml-2 w-5 h-5" />
-              </Link>
-            ) : (
-              <Link 
-                href="/register"
-                className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white text-purple-600 font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all"
-              >
-                Create Free Account
-                <ArrowRight className="ml-2 w-5 h-5" />
-              </Link>
-            )}
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
+              {isAuthenticated ? (
+                <Link 
+                  href="/dashboard"
+                  className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white text-purple-600 font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all"
+                >
+                  Go to Dashboard
+                  <ArrowRight className="ml-2 w-5 h-5" />
+                </Link>
+              ) : (
+                <Link 
+                  href="/register"
+                  className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white text-purple-600 font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all"
+                >
+                  Create Free Account
+                  <ArrowRight className="ml-2 w-5 h-5" />
+                </Link>
+              )}
+              
+              {/* ✅ DEMO VIDEO IN CTA */}
+              <DemoVideoModal 
+                videoUrl="https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+                buttonText="Watch Demo First"
+                buttonClassName="px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 text-white font-bold text-base sm:text-lg hover:bg-white/20 transition-all flex items-center space-x-2"
+              />
+            </div>
           </motion.div>
         </div>
       </section>
