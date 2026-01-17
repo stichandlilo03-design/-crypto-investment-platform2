@@ -349,7 +349,9 @@ export default function Deposit() {
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">Amount (USD)</label>
             <div className="relative">
-              <DollarSign className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+              <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6">
+                <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+              </div>
               <input
                 type="number"
                 value={usdAmount}
@@ -357,7 +359,7 @@ export default function Deposit() {
                 placeholder={selectedAsset === 'USD' ? '500.00' : '250.00'}
                 min={selectedAsset === 'USD' ? MIN_DEPOSIT.USD : MIN_DEPOSIT.CRYPTO}
                 step="0.01"
-                className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-green-500"
+                className="w-full pl-11 sm:pl-14 pr-3 sm:pr-4 py-2.5 sm:py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm sm:text-base focus:outline-none focus:border-green-500"
               />
             </div>
             
@@ -465,10 +467,12 @@ export default function Deposit() {
 
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-400 mb-2">Wallet Address:</label>
-                <div className="flex items-center space-x-2 p-3 rounded-lg bg-white/5 border border-white/10">
-                  <span className="flex-1 text-white font-mono text-xs sm:text-sm break-all">
-                    {CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.address}
-                  </span>
+                <div className="flex items-start sm:items-center space-x-2 p-3 rounded-lg bg-white/5 border border-white/10">
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    <p className="text-white font-mono text-xs leading-relaxed break-all">
+                      {CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.address}
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleCopy(CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.address, 'wallet')}
