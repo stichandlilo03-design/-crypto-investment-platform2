@@ -137,10 +137,11 @@ export default function HomePage() {
               <span className="text-lg sm:text-2xl font-display font-bold text-white">CryptoVault</span>
             </motion.div>
             
+            {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-6 lg:space-x-8">
               <a href="#features" className="text-sm lg:text-base text-gray-300 hover:text-white transition">Features</a>
               <a href="#testimonials" className="text-sm lg:text-base text-gray-300 hover:text-white transition">Testimonials</a>
-              <a href="about" className="text-sm lg:text-base text-gray-300 hover:text-white transition">About</a>
+              <Link href="/about" className="text-sm lg:text-base text-gray-300 hover:text-white transition">About</Link>
               {isAuthenticated ? (
                 <Link 
                   href="/dashboard"
@@ -161,6 +162,7 @@ export default function HomePage() {
               )}
             </div>
 
+            {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden p-2 rounded-lg text-white hover:bg-white/10 transition-all"
@@ -169,27 +171,54 @@ export default function HomePage() {
             </button>
           </div>
 
+          {/* Mobile Menu */}
           {mobileMenuOpen && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               className="md:hidden mt-4 pb-4 space-y-3"
             >
-              <a href="#features" className="block text-gray-300 hover:text-white transition py-2">Features</a>
-              <a href="#testimonials" className="block text-gray-300 hover:text-white transition py-2">Testimonials</a>
-              <a href="#about" className="block text-gray-300 hover:text-white transition py-2">About</a>
+              <a 
+                href="#features" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-gray-300 hover:text-white transition py-2"
+              >
+                Features
+              </a>
+              <a 
+                href="#testimonials" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-gray-300 hover:text-white transition py-2"
+              >
+                Testimonials
+              </a>
+              <Link 
+                href="/about" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-gray-300 hover:text-white transition py-2"
+              >
+                About
+              </Link>
               {isAuthenticated ? (
                 <Link 
                   href="/dashboard"
+                  onClick={() => setMobileMenuOpen(false)}
                   className="block text-center px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium"
                 >
                   Go to Dashboard
                 </Link>
               ) : (
                 <>
-                  <Link href="/login" className="block text-gray-300 hover:text-white transition py-2">Login</Link>
+                  <Link 
+                    href="/login" 
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block text-gray-300 hover:text-white transition py-2"
+                  >
+                    Login
+                  </Link>
                   <Link 
                     href="/register"
+                    onClick={() => setMobileMenuOpen(false)}
                     className="block text-center px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium"
                   >
                     Get Started
@@ -516,30 +545,30 @@ export default function HomePage() {
             <div>
               <h4 className="font-semibold text-white mb-3 sm:mb-4 text-sm sm:text-base">Product</h4>
               <ul className="space-y-2 text-xs sm:text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white transition">Features</a></li>
-                <li><a href="#" className="hover:text-white transition">Pricing</a></li>
-                <li><a href="#" className="hover:text-white transition">Security</a></li>
-                <li><a href="#" className="hover:text-white transition">API</a></li>
+                <li><a href="#features" className="hover:text-white transition">Features</a></li>
+                <li><a href="#testimonials" className="hover:text-white transition">Testimonials</a></li>
+                <li><Link href="/about" className="hover:text-white transition">About</Link></li>
+                <li><Link href="/register" className="hover:text-white transition">Get Started</Link></li>
               </ul>
             </div>
             
             <div>
               <h4 className="font-semibold text-white mb-3 sm:mb-4 text-sm sm:text-base">Company</h4>
               <ul className="space-y-2 text-xs sm:text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white transition">About</a></li>
-                <li><a href="#" className="hover:text-white transition">Blog</a></li>
-                <li><a href="#" className="hover:text-white transition">Careers</a></li>
-                <li><a href="#" className="hover:text-white transition">Contact</a></li>
+                <li><Link href="/about" className="hover:text-white transition">About Us</Link></li>
+                <li><a href="#testimonials" className="hover:text-white transition">Testimonials</a></li>
+                <li><a href="mailto:support@cryptovaultnew.sbs" className="hover:text-white transition">Contact</a></li>
+                <li><a href="tel:+18036301295" className="hover:text-white transition">Support</a></li>
               </ul>
             </div>
             
             <div>
               <h4 className="font-semibold text-white mb-3 sm:mb-4 text-sm sm:text-base">Legal</h4>
               <ul className="space-y-2 text-xs sm:text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white transition">Privacy</a></li>
-                <li><a href="#" className="hover:text-white transition">Terms</a></li>
+                <li><a href="#" className="hover:text-white transition">Privacy Policy</a></li>
+                <li><a href="#" className="hover:text-white transition">Terms of Service</a></li>
                 <li><a href="#" className="hover:text-white transition">Compliance</a></li>
-                <li><a href="#" className="hover:text-white transition">Licenses</a></li>
+                <li><Link href="/about" className="hover:text-white transition">Leadership</Link></li>
               </ul>
             </div>
           </div>
