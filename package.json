@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "clean": "rm -rf .next node_modules/.cache",
+    "rebuild": "npm run clean && npm install && npm run build",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "next": "^15.1.2",
