@@ -9,42 +9,42 @@ import QRCode from 'qrcode'
 // 🔧 CRYPTO WALLET ADDRESSES - Replace with your actual wallet addresses
 const CRYPTO_WALLETS = {
   BTC: {
-    address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+    address: 'bc1qjwpl49rh53p3s7euxq9t074mfxmtxue70rzve6',
     network: 'Bitcoin Network',
     confirmations: 3
   },
   ETH: {
-    address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    address: '0xba99397e779F619FbEaAc6f1924f2F0cd79134EA',
     network: 'Ethereum (ERC-20)',
     confirmations: 12
   },
   USDT: {
-    address: 'TYDzsYUEpvnYmQk4zGP9sWWcTEd2MiAtW6',
+    address: '0xba99397e779F619FbEaAc6f1924f2F0cd79134EA',
     network: 'Ethereum (ERC-20)',  // ✅ ERC-20 Network specified
     confirmations: 12
   },
   SOL: {
-    address: '7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV',
+    address: 'BnRgk89ztk8wwZfK5dYLV4tLScPG5vtQwXA7FhyUomX5',
     network: 'Solana Network',
     confirmations: 32
   },
   ADA: {
-    address: 'addr1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlhxu56se8d2v',
+    address: 'addr1qxpv53zfm2lhsyr908z5yh3ckhctluxx3hnl3dttyu09snj6tmgktn74dq3sxdn6p3cxjhlwudp5x03q50eylvsafp9q09xadr',
     network: 'Cardano Network',
     confirmations: 15
   },
   BNB: {
-    address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    address: '0xba99397e779F619FbEaAc6f1924f2F0cd79134EA',
     network: 'BNB Smart Chain (BEP-20)',
     confirmations: 15
   },
   XRP: {
-    address: 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh',
+    address: 'r3qHCQ5Fs31EFrTMnreNL2LwcumdSPZjhS',
     network: 'Ripple Network',
     confirmations: 1
   },
   DOGE: {
-    address: 'DH5yaieqoZN36fDVciNyRueRGvGLR3mr7L',
+    address: 'DTLGiNoUjbUrfsYeygKN9VZuKKSwR68Jzu',
     network: 'Dogecoin Network',
     confirmations: 6
   }
@@ -52,7 +52,7 @@ const CRYPTO_WALLETS = {
 
 // 🏦 BANK TRANSFER DETAILS
 const BANK_INFO = {
-  bankName: 'JPMorgan Chase Bank',
+  bankName: 'Sofi Bank',
   accountName: 'CryptoVault Holdings LLC',
   accountNumber: '1234567890',
   routingNumber: '021000021',
