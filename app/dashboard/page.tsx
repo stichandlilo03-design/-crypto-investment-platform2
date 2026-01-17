@@ -5,7 +5,7 @@ import {
   Wallet, ArrowUpRight, ArrowDownRight, DollarSign,
   PieChart, Activity, Settings, LogOut, Bell, Search, Download, Upload,
   Eye, EyeOff, History, Menu, X, Clock, 
-  CheckCircle, Loader2, TrendingUp, TrendingDown, ArrowDownUp
+  CheckCircle, Loader2, TrendingUp, TrendingDown, ArrowDownUp, AlertCircle
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -49,7 +49,8 @@ export default function DashboardPage() {
   const [withdrawLoading, setWithdrawLoading] = useState(false)
   const [withdrawSuccess, setWithdrawSuccess] = useState(false)
   const [withdrawError, setWithdrawError] = useState('')
-  const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [withdrawUsdAmount, setWithdrawUsdAmount] = useState('')
+  const [withdrawCryptoAmount, setWithdrawCryptoAmount] = useState('0.00000000')
   const [withdrawAsset, setWithdrawAsset] = useState('USD')
   const [withdrawAddress, setWithdrawAddress] = useState('')
   
@@ -127,9 +128,8 @@ export default function DashboardPage() {
         )
         const data = await response.json()
         setCryptoPrices(data)
-        console.log('✅ Fetched crypto prices:', data)
       } catch (error) {
-        console.error('❌ Error fetching crypto prices:', error)
+        console.error('Error fetching crypto prices:', error)
       }
     }
     
@@ -138,11 +138,26 @@ export default function DashboardPage() {
     return () => clearInterval(interval)
   }, [])
 
+  // ✅ Calculate withdraw crypto amount when USD changes
+  useEffect(() => {
+    if (!withdrawUsdAmount || withdrawAsset === 'USD') {
+      setWithdrawCryptoAmount(withdrawUsdAmount || '0.00')
+      return
+    }
+
+    const usd = parseFloat(withdrawUsdAmount) || 0
+    const price = getAssetPrice(withdrawAsset)
+    
+    if (price > 0) {
+      const crypto = usd / price
+      setWithdrawCryptoAmount(crypto.toFixed(8))
+    }
+  }, [withdrawUsdAmount, withdrawAsset, cryptoPrices])
+
   // ✅ Get asset price with proper mapping
   const getAssetPrice = (asset: string): number => {
     if (asset === 'USD') return 1
     
-    // Map crypto symbols to CoinGecko IDs
     const assetMap: { [key: string]: string } = {
       'BTC': 'bitcoin',
       'ETH': 'ethereum',
@@ -155,9 +170,7 @@ export default function DashboardPage() {
     }
     
     const coinGeckoId = assetMap[asset] || asset.toLowerCase()
-    const price = cryptoPrices[coinGeckoId]?.usd || 0
-    
-    return price
+    return cryptoPrices[coinGeckoId]?.usd || 0
   }
 
   // ✅ Calculate Total Balance from user_balances
@@ -171,6 +184,12 @@ export default function DashboardPage() {
     }, 0)
     
     return total
+  }
+
+  // ✅ Calculate available balance for specific asset
+  const getAvailableBalance = (asset: string): number => {
+    const balance = userBalances.find(b => b.asset === asset)
+    return balance ? Number(balance.amount) : 0
   }
 
   // ✅ Calculate Total Deposits
@@ -198,13 +217,27 @@ export default function DashboardPage() {
     
     try {
       if (!user) throw new Error('User not authenticated')
-      if (!withdrawAmount || Number(withdrawAmount) <= 0) throw new Error('Invalid amount')
       
-      const totalBalance = calculateTotalBalance()
-      if (Number(withdrawAmount) > totalBalance) {
-        throw new Error('Insufficient balance')
+      const usdAmount = parseFloat(withdrawUsdAmount)
+      const cryptoAmount = parseFloat(withdrawCryptoAmount)
+      
+      if (!usdAmount || usdAmount <= 0) throw new Error('Invalid USD amount')
+      if (!cryptoAmount || cryptoAmount <= 0) throw new Error('Invalid crypto amount')
+
+      // Check if user has enough balance for this asset
+      const availableBalance = getAvailableBalance(withdrawAsset)
+      
+      if (withdrawAsset === 'USD') {
+        if (usdAmount > availableBalance) {
+          throw new Error(`Insufficient USD balance. Available: $${availableBalance.toFixed(2)}`)
+        }
+      } else {
+        if (cryptoAmount > availableBalance) {
+          throw new Error(`Insufficient ${withdrawAsset} balance. Available: ${availableBalance.toFixed(8)} ${withdrawAsset}`)
+        }
       }
 
+      // ✅ INSERT WITHDRAWAL WITH CORRECT AMOUNTS
       const { error: insertError } = await supabase
         .from('transactions')
         .insert([
@@ -212,8 +245,8 @@ export default function DashboardPage() {
             user_id: user.id,
             type: 'withdraw',
             asset: withdrawAsset,
-            amount: Number(withdrawAmount),
-            value_usd: Number(withdrawAmount),
+            amount: cryptoAmount,  // Crypto amount
+            value_usd: usdAmount,  // USD value
             status: 'pending',
             wallet_address: withdrawAddress || null
           }
@@ -226,13 +259,14 @@ export default function DashboardPage() {
           user_id: user.id,
           type: 'withdraw',
           title: 'Withdrawal Request Submitted',
-          message: `Your withdrawal request of $${withdrawAmount} ${withdrawAsset} has been submitted and is pending approval.`,
+          message: `Your withdrawal request of $${usdAmount.toFixed(2)} (${cryptoAmount.toFixed(8)} ${withdrawAsset}) has been submitted and is pending approval.`,
           read: false
         }
       ])
       
       setWithdrawSuccess(true)
-      setWithdrawAmount('')
+      setWithdrawUsdAmount('')
+      setWithdrawCryptoAmount('0.00000000')
       setWithdrawAsset('USD')
       setWithdrawAddress('')
       
@@ -324,30 +358,43 @@ export default function DashboardPage() {
 
   // ✅ Navigation Items
   const NavItems = () => (
-    <nav className="space-y-2">
-      {[
-        { id: 'overview', icon: PieChart, label: 'Overview' },
-        { id: 'portfolio', icon: TrendingUp, label: 'Portfolio' },
-        { id: 'swap', icon: ArrowDownUp, label: 'Swap', highlight: true },
-        { id: 'deposit', icon: Upload, label: 'Deposit', highlight: true },
-        { id: 'withdraw', icon: Download, label: 'Withdraw' },
-        { id: 'transactions', icon: History, label: 'Transactions' },
-        { id: 'markets', icon: Activity, label: 'Markets' },
-        { id: 'settings', icon: Settings, label: 'Settings' }
-      ].map(item => (
-        <button
-          key={item.id}
-          onClick={() => { setSelectedTab(item.id); setSidebarOpen(false) }}
-          className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-            selectedTab === item.id ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 
-            item.highlight ? 'text-green-400 hover:bg-green-500/10' :
-            'text-gray-400 hover:bg-white/5 hover:text-white'
-          }`}
+    <nav className="flex flex-col h-full">
+      <div className="flex-1 space-y-2">
+        {[
+          { id: 'overview', icon: PieChart, label: 'Overview' },
+          { id: 'portfolio', icon: TrendingUp, label: 'Portfolio' },
+          { id: 'swap', icon: ArrowDownUp, label: 'Swap', highlight: true },
+          { id: 'deposit', icon: Upload, label: 'Deposit', highlight: true },
+          { id: 'withdraw', icon: Download, label: 'Withdraw' },
+          { id: 'transactions', icon: History, label: 'Transactions' },
+          { id: 'markets', icon: Activity, label: 'Markets' },
+          { id: 'settings', icon: Settings, label: 'Settings' }
+        ].map(item => (
+          <button
+            key={item.id}
+            onClick={() => { setSelectedTab(item.id); setSidebarOpen(false) }}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
+              selectedTab === item.id ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 
+              item.highlight ? 'text-green-400 hover:bg-green-500/10' :
+              'text-gray-400 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <item.icon className="w-5 h-5" />
+            <span className="font-medium">{item.label}</span>
+          </button>
+        ))}
+      </div>
+      
+      {/* Fixed Logout Button at Bottom */}
+      <div className="mt-auto pt-4 border-t border-white/10">
+        <button 
+          onClick={signOut}
+          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
         >
-          <item.icon className="w-5 h-5" />
-          <span className="font-medium">{item.label}</span>
+          <LogOut className="w-5 h-5" />
+          <span>Logout</span>
         </button>
-      ))}
+      </div>
     </nav>
   )
 
@@ -380,8 +427,8 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
-      {/* ✅ Desktop Sidebar */}
-      <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40 overflow-y-auto">
+      {/* ✅ Desktop Sidebar - FIXED HEIGHT */}
+      <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40 flex-col">
         <div className="flex items-center space-x-2 mb-8">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
             <Wallet className="w-6 h-6 text-white" />
@@ -389,16 +436,9 @@ export default function DashboardPage() {
           <span className="text-xl font-bold text-white">CryptoVault</span>
         </div>
         <NavItems />
-        <button 
-          onClick={signOut}
-          className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-        >
-          <LogOut className="w-5 h-5" />
-          <span>Logout</span>
-        </button>
       </aside>
 
-      {/* ✅ Mobile Sidebar */}
+      {/* ✅ Mobile Sidebar - FIXED HEIGHT */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
@@ -413,7 +453,7 @@ export default function DashboardPage() {
               initial={{ x: -300 }} 
               animate={{ x: 0 }} 
               exit={{ x: -300 }}
-              className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50 overflow-y-auto"
+              className="lg:hidden fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-50 flex flex-col"
             >
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center space-x-2">
@@ -427,13 +467,6 @@ export default function DashboardPage() {
                 </button>
               </div>
               <NavItems />
-              <button 
-                onClick={signOut}
-                className="absolute bottom-6 left-6 right-6 flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
-              >
-                <LogOut className="w-5 h-5" />
-                <span>Logout</span>
-              </button>
             </motion.aside>
           </>
         )}
@@ -841,22 +874,47 @@ export default function DashboardPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">Amount *</label>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Amount (USD)</label>
                     <div className="relative">
                       <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         type="number"
-                        value={withdrawAmount}
-                        onChange={(e) => setWithdrawAmount(e.target.value)}
+                        value={withdrawUsdAmount}
+                        onChange={(e) => setWithdrawUsdAmount(e.target.value)}
                         placeholder="0.00"
                         min="10"
                         step="0.01"
-                        max={calculateTotalBalance()}
                         className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
                         required
                       />
                     </div>
                   </div>
+
+                  {/* Show Crypto Amount */}
+                  {withdrawAsset !== 'USD' && parseFloat(withdrawUsdAmount) > 0 && (
+                    <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                      <div className="flex items-start space-x-3">
+                        <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-blue-400 font-medium text-sm mb-2">Withdrawal Summary:</p>
+                          <div className="space-y-1.5 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">USD Amount:</span>
+                              <span className="text-white font-bold">${parseFloat(withdrawUsdAmount).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">{withdrawAsset} Amount:</span>
+                              <span className="text-white font-bold">{withdrawCryptoAmount} {withdrawAsset}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Current Price:</span>
+                              <span className="text-white">${getAssetPrice(withdrawAsset).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {withdrawAsset !== 'USD' && (
                     <div>
