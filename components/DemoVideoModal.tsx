@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Play } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Play, ExternalLink } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface DemoVideoModalProps {
@@ -16,26 +16,54 @@ export default function DemoVideoModal({
   buttonClassName = ""
 }: DemoVideoModalProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
 
-  // ✅ Detect video type and convert to embed URL
+  // ✅ Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
+    }
+    checkMobile()
+  }, [])
+
+  // ✅ Detect if it's a YouTube Short
+  const isYouTubeShort = (url: string) => {
+    return url.includes('/shorts/')
+  }
+
+  // ✅ Get video ID from YouTube URL
+  const getYouTubeVideoId = (url: string) => {
+    if (url.includes('/shorts/')) {
+      return url.split('/shorts/')[1]?.split('?')[0]
+    }
+    if (url.includes('youtu.be/')) {
+      return url.split('youtu.be/')[1]?.split('?')[0]
+    }
+    if (url.includes('v=')) {
+      return url.split('v=')[1]?.split('&')[0]
+    }
+    return ''
+  }
+
+  // ✅ Handle button click
+  const handleClick = () => {
+    const isShort = isYouTubeShort(videoUrl)
+    
+    // If mobile + YouTube Short, open in new tab
+    if (isMobile && isShort) {
+      window.open(videoUrl, '_blank')
+    } else {
+      setIsOpen(true)
+    }
+  }
+
+  // ✅ Get embed URL for desktop
   const getVideoEmbedUrl = (url: string) => {
-    // YouTube Shorts or regular video
+    // YouTube
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      let videoId = ''
-      
-      // YouTube Shorts format: https://youtube.com/shorts/I81fU7XSifE
-      if (url.includes('/shorts/')) {
-        videoId = url.split('/shorts/')[1]?.split('?')[0]
-      }
-      // Regular YouTube: https://youtube.com/watch?v=ABC123
-      else if (url.includes('youtu.be')) {
-        videoId = url.split('youtu.be/')[1]?.split('?')[0]
-      }
-      else if (url.includes('v=')) {
-        videoId = url.split('v=')[1]?.split('&')[0]
-      }
-      
-      return `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`
+      const videoId = getYouTubeVideoId(url)
+      // Use regular embed for Shorts on desktop (works better)
+      return `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`
     }
     
     // Vimeo
@@ -44,7 +72,6 @@ export default function DemoVideoModal({
       return `https://player.vimeo.com/video/${videoId}?autoplay=1`
     }
     
-    // Direct video file
     return url
   }
 
@@ -55,16 +82,19 @@ export default function DemoVideoModal({
     <>
       {/* ✅ Watch Demo Button */}
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={handleClick}
         className={buttonClassName || "group relative px-8 py-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full text-white font-bold hover:shadow-2xl hover:shadow-purple-500/50 transition-all flex items-center space-x-2"}
       >
         <Play className="w-5 h-5 group-hover:scale-110 transition-transform" />
         <span>{buttonText}</span>
+        {isMobile && isYouTubeShort(videoUrl) && (
+          <ExternalLink className="w-4 h-4 ml-1" />
+        )}
       </button>
 
-      {/* ✅ Video Modal */}
+      {/* ✅ Video Modal (Desktop only for Shorts) */}
       <AnimatePresence>
-        {isOpen && (
+        {isOpen && !isMobile && (
           <>
             {/* Backdrop */}
             <motion.div
@@ -94,7 +124,6 @@ export default function DemoVideoModal({
                 {/* Video Container */}
                 <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
                   {isDirectVideo ? (
-                    // Direct video file
                     <video
                       src={embedUrl}
                       controls
@@ -104,7 +133,6 @@ export default function DemoVideoModal({
                       Your browser does not support video playback.
                     </video>
                   ) : (
-                    // YouTube/Vimeo embed
                     <iframe
                       src={embedUrl}
                       className="absolute top-0 left-0 w-full h-full"
