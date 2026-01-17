@@ -150,16 +150,19 @@ export default function SwapComponent() {
         usdValue
       })
 
-      // ✅ CREATE SWAP TRANSACTION - ONLY REQUIRED COLUMNS
+      // ✅ CREATE SWAP TRANSACTION WITH ALL COLUMNS (table has them now!)
       const { error: swapError } = await supabase
         .from('swap_transactions')
         .insert({
           user_id: user.id,
           from_asset: fromAsset,
           to_asset: toAsset,
-          from_amount: fromAmountNum,      // ✅ NOT NULL
-          to_amount: toAmountNum,          // ✅ NOT NULL
+          from_amount: fromAmountNum,
+          to_amount: toAmountNum,
+          from_price: fromPrice,
+          to_price: toPrice,
           value_usd: usdValue,
+          exchange_rate: toPrice > 0 ? fromPrice / toPrice : 0,
           status: 'pending'
         })
 
