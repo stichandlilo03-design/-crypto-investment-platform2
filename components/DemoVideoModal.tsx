@@ -5,7 +5,7 @@ import { X, Play } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface DemoVideoModalProps {
-  videoUrl: string  // Your video URL (YouTube, Vimeo, or direct file)
+  videoUrl: string
   buttonText?: string
   buttonClassName?: string
 }
@@ -17,13 +17,24 @@ export default function DemoVideoModal({
 }: DemoVideoModalProps) {
   const [isOpen, setIsOpen] = useState(false)
 
-  // ✅ Detect video type
+  // ✅ Detect video type and convert to embed URL
   const getVideoEmbedUrl = (url: string) => {
-    // YouTube
+    // YouTube Shorts or regular video
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      const videoId = url.includes('youtu.be') 
-        ? url.split('youtu.be/')[1]?.split('?')[0]
-        : url.split('v=')[1]?.split('&')[0]
+      let videoId = ''
+      
+      // YouTube Shorts format: https://youtube.com/shorts/I81fU7XSifE
+      if (url.includes('/shorts/')) {
+        videoId = url.split('/shorts/')[1]?.split('?')[0]
+      }
+      // Regular YouTube: https://youtube.com/watch?v=ABC123
+      else if (url.includes('youtu.be')) {
+        videoId = url.split('youtu.be/')[1]?.split('?')[0]
+      }
+      else if (url.includes('v=')) {
+        videoId = url.split('v=')[1]?.split('&')[0]
+      }
+      
       return `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`
     }
     
@@ -103,7 +114,7 @@ export default function DemoVideoModal({
                   )}
                 </div>
 
-                {/* Optional: Video Title/Description */}
+                {/* Video Title/Description */}
                 <div className="p-6 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-t border-white/10">
                   <h3 className="text-xl font-bold text-white mb-2">CryptoVault Demo</h3>
                   <p className="text-gray-400 text-sm">
