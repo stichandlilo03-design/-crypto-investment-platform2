@@ -137,20 +137,20 @@ export default function SwapComponent() {
       // Check balance
       const availableBalance = getAvailableBalance(fromAsset)
       if (fromAmountNum > availableBalance) {
-        throw new Error(`Insufficient ${fromAsset} balance. Available: ${availableBalance}`)
+        throw new Error(`Insufficient ${fromAsset} balance. Available: ${availableBalance.toFixed(8)}`)
       }
 
       const fromPrice = getAssetPrice(fromAsset)
       const toPrice = getAssetPrice(toAsset)
       const usdValue = fromAmountNum * fromPrice
 
-      console.log('🔄 SWAP TRANSACTION:', {
+      console.log('🔄 INSTANT SWAP:', {
         from: { asset: fromAsset, amount: fromAmountNum, price: fromPrice },
         to: { asset: toAsset, amount: toAmountNum, price: toPrice },
         usdValue
       })
 
-      // ✅ CREATE SWAP TRANSACTION WITH ALL COLUMNS (table has them now!)
+      // ✅ STEP 1: Create swap transaction record (status: completed)
       const { error: swapError } = await supabase
         .from('swap_transactions')
         .insert({
@@ -163,7 +163,7 @@ export default function SwapComponent() {
           to_price: toPrice,
           value_usd: usdValue,
           exchange_rate: toPrice > 0 ? fromPrice / toPrice : 0,
-          status: 'pending'
+          status: 'completed'  // ✅ INSTANT - No approval needed
         })
 
       if (swapError) {
@@ -171,12 +171,83 @@ export default function SwapComponent() {
         throw swapError
       }
 
-      // Create notification
+      // ✅ STEP 2: Subtract FROM asset balance
+      const { data: fromBalance } = await supabase
+        .from('user_balances')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('asset', fromAsset)
+        .single()
+
+      if (fromBalance) {
+        const newFromAmount = Number(fromBalance.amount) - fromAmountNum
+        
+        if (newFromAmount < 0) {
+          throw new Error('Insufficient balance')
+        }
+
+        // Update or delete if balance becomes zero
+        if (newFromAmount > 0.00000001) {
+          await supabase
+            .from('user_balances')
+            .update({ amount: newFromAmount })
+            .eq('user_id', user.id)
+            .eq('asset', fromAsset)
+        } else {
+          // Delete if balance is essentially zero
+          await supabase
+            .from('user_balances')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('asset', fromAsset)
+        }
+      }
+
+      // ✅ STEP 3: Add TO asset balance
+      const { data: toBalance } = await supabase
+        .from('user_balances')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('asset', toAsset)
+        .single()
+
+      if (toBalance) {
+        // Update existing balance
+        const existingAmount = Number(toBalance.amount)
+        const existingAvgPrice = Number(toBalance.average_buy_price)
+        const newTotalAmount = existingAmount + toAmountNum
+
+        // Calculate weighted average buy price
+        const existingValue = existingAmount * existingAvgPrice
+        const newValue = toAmountNum * toPrice
+        const newAvgPrice = (existingValue + newValue) / newTotalAmount
+
+        await supabase
+          .from('user_balances')
+          .update({
+            amount: newTotalAmount,
+            average_buy_price: newAvgPrice
+          })
+          .eq('user_id', user.id)
+          .eq('asset', toAsset)
+      } else {
+        // Create new balance
+        await supabase
+          .from('user_balances')
+          .insert({
+            user_id: user.id,
+            asset: toAsset,
+            amount: toAmountNum,
+            average_buy_price: toPrice
+          })
+      }
+
+      // ✅ STEP 4: Create success notification
       await supabase.from('notifications').insert({
         user_id: user.id,
         type: 'swap',
-        title: 'Swap Request Submitted',
-        message: `Your swap of ${fromAmountNum.toFixed(8)} ${fromAsset} to ${toAmountNum.toFixed(8)} ${toAsset} is pending approval.`,
+        title: 'Swap Completed Successfully',
+        message: `✅ Swapped ${fromAmountNum.toFixed(8)} ${fromAsset} → ${toAmountNum.toFixed(8)} ${toAsset}`,
         read: false
       })
 
@@ -184,6 +255,7 @@ export default function SwapComponent() {
       setFromAmount('')
       setToAmount('0.00000000')
 
+      // Refresh balances
       setTimeout(() => {
         setSuccess(false)
         window.location.reload()
@@ -231,7 +303,10 @@ export default function SwapComponent() {
           className="mb-6 p-4 rounded-xl bg-green-500/20 border border-green-500/30 flex items-start space-x-3"
         >
           <CheckCircle className="w-5 h-5 text-green-400" />
-          <p className="text-green-400 font-medium">Swap request submitted successfully!</p>
+          <div>
+            <p className="text-green-400 font-medium">Swap completed successfully!</p>
+            <p className="text-green-300 text-sm mt-1">Your portfolio has been updated</p>
+          </div>
         </motion.div>
       )}
 
