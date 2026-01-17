@@ -297,7 +297,7 @@ export default function Deposit() {
         }
       ])
 
-      alert('✅ Deposit request submitted successfully! Please wait for admin approval.')
+      alert('✅ Deposit request submitted successfully! Please wait for processing.')
       
       // Reset form
       setUsdAmount('')
@@ -637,7 +637,7 @@ export default function Deposit() {
               <li>• {selectedAsset === 'USD' ? `Minimum deposit: $${MIN_DEPOSIT.USD.toLocaleString()}` : `Minimum deposit: $${MIN_DEPOSIT.CRYPTO.toLocaleString()} equivalent`}</li>
               <li>• {selectedAsset === 'USD' ? 'Use your email as payment reference' : `Send only ${selectedAsset} to this address on ${CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.network}`}</li>
               <li>• Upload clear payment proof (screenshot or receipt)</li>
-              <li>• Deposits are processed after admin approval</li>
+              <li>• Deposits are processed after Confirmed</li>
               <li>• Processing time: {selectedAsset === 'USD' ? '2-5 business days' : '10-30 minutes after confirmations'}</li>
             </ul>
           </div>
