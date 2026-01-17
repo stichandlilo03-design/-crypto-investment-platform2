@@ -27,7 +27,6 @@ export default function HomePage() {
   const supabase = createClientComponentClient()
   const router = useRouter()
 
-  // Check authentication status without redirecting
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -42,7 +41,6 @@ export default function HomePage() {
 
     checkAuth()
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(!!session)
     })
@@ -114,7 +112,6 @@ export default function HomePage() {
     { value: "99.9%", label: "Uptime Guarantee" }
   ]
 
-  // Show loading state briefly
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
@@ -140,7 +137,6 @@ export default function HomePage() {
               <span className="text-lg sm:text-2xl font-display font-bold text-white">CryptoVault</span>
             </motion.div>
             
-            {/* Desktop Menu */}
             <div className="hidden md:flex items-center space-x-6 lg:space-x-8">
               <a href="#features" className="text-sm lg:text-base text-gray-300 hover:text-white transition">Features</a>
               <a href="#testimonials" className="text-sm lg:text-base text-gray-300 hover:text-white transition">Testimonials</a>
@@ -165,7 +161,6 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden p-2 rounded-lg text-white hover:bg-white/10 transition-all"
@@ -174,7 +169,6 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* Mobile Menu */}
           {mobileMenuOpen && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -244,9 +238,8 @@ export default function HomePage() {
                   </Link>
                 )}
                 
-                {/* ✅ DEMO VIDEO BUTTON */}
                 <DemoVideoModal 
-                  videoUrl="https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+                  videoUrl="https://www.youtube.com/shorts/I81fU7XSifE"
                   buttonText="Watch Demo"
                   buttonClassName="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl glass-effect text-white font-semibold text-base sm:text-lg hover:bg-white/10 transition-all flex items-center justify-center space-x-2"
                 />
@@ -369,7 +362,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ✅ DEMO VIDEO SHOWCASE SECTION */}
+      {/* Demo Showcase Section */}
       <section className="py-12 sm:py-20 px-4 sm:px-6 bg-gradient-to-r from-purple-500/10 to-pink-500/10">
         <div className="max-w-6xl mx-auto text-center">
           <motion.div
@@ -384,28 +377,26 @@ export default function HomePage() {
               Watch how easy it is to manage your crypto portfolio with our intuitive platform
             </p>
 
-            {/* Large Demo Video Button */}
             <div className="inline-block mb-8">
               <DemoVideoModal 
-                videoUrl="https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+                videoUrl="https://www.youtube.com/shorts/I81fU7XSifE"
                 buttonText="🎥 Watch Full Demo"
                 buttonClassName="px-8 sm:px-12 py-4 sm:py-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl text-white text-lg sm:text-xl font-bold hover:shadow-2xl hover:shadow-purple-500/50 transition-all flex items-center space-x-3"
               />
             </div>
 
-            {/* Video Features */}
             <div className="grid sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
               <div className="text-center">
-                <div className="text-2xl font-bold text-white mb-2">3 Min</div>
-                <div className="text-sm text-gray-400">Quick Overview</div>
+                <div className="text-2xl font-bold text-white mb-2">Quick</div>
+                <div className="text-sm text-gray-400">Easy Overview</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-white mb-2">HD Quality</div>
                 <div className="text-sm text-gray-400">Crystal Clear</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-white mb-2">Step-by-Step</div>
-                <div className="text-sm text-gray-400">Easy to Follow</div>
+                <div className="text-2xl font-bold text-white mb-2">Real Demo</div>
+                <div className="text-sm text-gray-400">Actual Platform</div>
               </div>
             </div>
           </motion.div>
@@ -496,9 +487,8 @@ export default function HomePage() {
                 </Link>
               )}
               
-              {/* ✅ DEMO VIDEO IN CTA */}
               <DemoVideoModal 
-                videoUrl="https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+                videoUrl="https://www.youtube.com/shorts/I81fU7XSifE"
                 buttonText="Watch Demo First"
                 buttonClassName="px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 text-white font-bold text-base sm:text-lg hover:bg-white/20 transition-all flex items-center space-x-2"
               />
