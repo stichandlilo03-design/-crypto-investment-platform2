@@ -246,7 +246,7 @@ export default function HomePage() {
                 
                 {/* ✅ DEMO VIDEO BUTTON */}
                 <DemoVideoModal 
-                  videoUrl="https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+                  videoUrl="https://youtube.com/shorts/I81fU7XSifE?feature=share"
                   buttonText="Watch Demo"
                   buttonClassName="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl glass-effect text-white font-semibold text-base sm:text-lg hover:bg-white/10 transition-all flex items-center justify-center space-x-2"
                 />
@@ -387,7 +387,7 @@ export default function HomePage() {
             {/* Large Demo Video Button */}
             <div className="inline-block mb-8">
               <DemoVideoModal 
-                videoUrl="https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+                videoUrl="https://youtube.com/shorts/I81fU7XSifE?feature=share"
                 buttonText="🎥 Watch Full Demo"
                 buttonClassName="px-8 sm:px-12 py-4 sm:py-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl text-white text-lg sm:text-xl font-bold hover:shadow-2xl hover:shadow-purple-500/50 transition-all flex items-center space-x-3"
               />
@@ -498,7 +498,7 @@ export default function HomePage() {
               
               {/* ✅ DEMO VIDEO IN CTA */}
               <DemoVideoModal 
-                videoUrl="https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+                videoUrl="https://youtube.com/shorts/I81fU7XSifE?feature=share"
                 buttonText="Watch Demo First"
                 buttonClassName="px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 text-white font-bold text-base sm:text-lg hover:bg-white/20 transition-all flex items-center space-x-2"
               />
