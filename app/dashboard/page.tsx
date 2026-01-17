@@ -17,12 +17,12 @@ import Deposit from '@/components/Deposit'
 
 // Types
 interface CryptoPrice {
-  usd: number;
-  usd_24h_change: number;
+  usd: number
+  usd_24h_change: number
 }
 
 interface CryptoPrices {
-  [key: string]: CryptoPrice;
+  [key: string]: CryptoPrice
 }
 
 interface UserBalance {
@@ -118,7 +118,7 @@ export default function DashboardPage() {
     }
   }, [user])
 
-  // Fetch Crypto Prices
+  // ✅ Fetch Crypto Prices
   useEffect(() => {
     const fetchPrices = async () => {
       try {
@@ -127,9 +127,9 @@ export default function DashboardPage() {
         )
         const data = await response.json()
         setCryptoPrices(data)
-        console.log('Fetched crypto prices:', data)
+        console.log('✅ Fetched crypto prices:', data)
       } catch (error) {
-        console.error('Error fetching crypto prices:', error)
+        console.error('❌ Error fetching crypto prices:', error)
       }
     }
     
@@ -157,7 +157,6 @@ export default function DashboardPage() {
     const coinGeckoId = assetMap[asset] || asset.toLowerCase()
     const price = cryptoPrices[coinGeckoId]?.usd || 0
     
-    console.log(`Price for ${asset} (${coinGeckoId}):`, price)
     return price
   }
 
@@ -168,15 +167,13 @@ export default function DashboardPage() {
     const total = userBalances.reduce((sum, balance) => {
       const assetPrice = getAssetPrice(balance.asset)
       const value = Number(balance.amount) * assetPrice
-      console.log(`Balance calc: ${balance.amount} ${balance.asset} @ $${assetPrice} = $${value}`)
       return sum + value
     }, 0)
     
-    console.log('Total balance:', total)
     return total
   }
 
-  // Calculate Total Deposits
+  // ✅ Calculate Total Deposits
   const calculateTotalDeposits = () => {
     const depositTransactions = transactions.filter(tx => 
       tx.type === 'deposit' && tx.status === 'approved'
@@ -184,7 +181,7 @@ export default function DashboardPage() {
     return depositTransactions.reduce((total, tx) => total + Number(tx.value_usd || tx.amount), 0)
   }
 
-  // Calculate Total Withdrawals
+  // ✅ Calculate Total Withdrawals
   const calculateTotalWithdrawals = () => {
     const withdrawalTransactions = transactions.filter(tx => 
       tx.type === 'withdraw' && tx.status === 'approved'
@@ -192,7 +189,7 @@ export default function DashboardPage() {
     return withdrawalTransactions.reduce((total, tx) => total + Number(tx.value_usd || tx.amount), 0)
   }
 
-  // Handle Withdrawal
+  // ✅ Handle Withdrawal
   const handleWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault()
     setWithdrawLoading(true)
@@ -229,7 +226,7 @@ export default function DashboardPage() {
           user_id: user.id,
           type: 'withdraw',
           title: 'Withdrawal Request Submitted',
-          message: `Your withdrawal request of $${withdrawAmount} ${withdrawAsset} has been submitted.`,
+          message: `Your withdrawal request of $${withdrawAmount} ${withdrawAsset} has been submitted and is pending approval.`,
           read: false
         }
       ])
@@ -259,7 +256,7 @@ export default function DashboardPage() {
     }
   }
 
-  // Filter Transactions
+  // ✅ Filter Transactions
   const filteredTransactions = transactions.filter(tx => {
     const matchesSearch = searchQuery === '' || 
       tx.asset?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -271,7 +268,7 @@ export default function DashboardPage() {
     return matchesSearch && matchesStatus && matchesType
   })
 
-  // Format Currency
+  // ✅ Format Currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -281,7 +278,7 @@ export default function DashboardPage() {
     }).format(amount)
   }
 
-  // Format Date
+  // ✅ Format Date
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -292,7 +289,7 @@ export default function DashboardPage() {
     })
   }
 
-  // Get Status Badge
+  // ✅ Get Status Badge
   const getStatusBadge = (status: string) => {
     const styles = {
       pending: 'bg-yellow-500/20 text-yellow-400',
@@ -307,7 +304,25 @@ export default function DashboardPage() {
     )
   }
 
-  // Navigation Items
+  // ✅ Get 24h Price Change
+  const get24hChange = (asset: string): number => {
+    if (asset === 'USD') return 0
+    
+    const changeMap: { [key: string]: number } = {
+      'BTC': cryptoPrices.bitcoin?.usd_24h_change || 0,
+      'ETH': cryptoPrices.ethereum?.usd_24h_change || 0,
+      'USDT': cryptoPrices.tether?.usd_24h_change || 0,
+      'SOL': cryptoPrices.solana?.usd_24h_change || 0,
+      'ADA': cryptoPrices.cardano?.usd_24h_change || 0,
+      'BNB': cryptoPrices.binancecoin?.usd_24h_change || 0,
+      'XRP': cryptoPrices.ripple?.usd_24h_change || 0,
+      'DOGE': cryptoPrices.dogecoin?.usd_24h_change || 0
+    }
+    
+    return changeMap[asset] || 0
+  }
+
+  // ✅ Navigation Items
   const NavItems = () => (
     <nav className="space-y-2">
       {[
@@ -336,7 +351,13 @@ export default function DashboardPage() {
     </nav>
   )
 
-  // Loading State
+  // ✅ Get First Name
+  const getFirstName = () => {
+    if (!profile?.full_name) return 'User'
+    return profile.full_name.split(' ')[0]
+  }
+
+  // ✅ Loading State
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
@@ -348,6 +369,7 @@ export default function DashboardPage() {
     )
   }
 
+  // ✅ Redirect if not authenticated or is admin
   if (!user || profile?.role === 'admin') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
@@ -356,14 +378,9 @@ export default function DashboardPage() {
     )
   }
 
-  const getFirstName = () => {
-    if (!profile?.full_name) return 'User'
-    return profile.full_name.split(' ')[0]
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
-      {/* Desktop Sidebar */}
+      {/* ✅ Desktop Sidebar */}
       <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40 overflow-y-auto">
         <div className="flex items-center space-x-2 mb-8">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -381,7 +398,7 @@ export default function DashboardPage() {
         </button>
       </aside>
 
-      {/* Mobile Sidebar */}
+      {/* ✅ Mobile Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
@@ -422,7 +439,7 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Notifications Sidebar */}
+      {/* ✅ Notifications Sidebar */}
       <AnimatePresence>
         {notificationsOpen && (
           <>
@@ -474,9 +491,9 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
+      {/* ✅ Main Content */}
       <main className="lg:ml-64 p-4 sm:p-8">
-        {/* Header */}
+        {/* ✅ Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <button 
@@ -519,7 +536,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Content Area */}
+        {/* ✅ Content Area */}
         <AnimatePresence mode="wait">
           {selectedTab === 'overview' && (
             <motion.div
@@ -591,7 +608,7 @@ export default function DashboardPage() {
                       <p className="text-gray-400">No assets yet</p>
                       <button 
                         onClick={() => setSelectedTab('deposit')}
-                        className="mt-4 px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-white font-medium"
+                        className="mt-4 px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-white font-medium hover:opacity-90 transition-all"
                       >
                         Make a Deposit
                       </button>
@@ -601,20 +618,10 @@ export default function DashboardPage() {
                       {userBalances.map(balance => {
                         const price = getAssetPrice(balance.asset)
                         const value = Number(balance.amount) * price
-                        
-                        // Get 24h change
-                        let change = 0
-                        if (balance.asset === 'BTC') change = cryptoPrices.bitcoin?.usd_24h_change || 0
-                        else if (balance.asset === 'ETH') change = cryptoPrices.ethereum?.usd_24h_change || 0
-                        else if (balance.asset === 'USDT') change = cryptoPrices.tether?.usd_24h_change || 0
-                        else if (balance.asset === 'SOL') change = cryptoPrices.solana?.usd_24h_change || 0
-                        else if (balance.asset === 'ADA') change = cryptoPrices.cardano?.usd_24h_change || 0
-                        else if (balance.asset === 'BNB') change = cryptoPrices.binancecoin?.usd_24h_change || 0
-                        else if (balance.asset === 'XRP') change = cryptoPrices.ripple?.usd_24h_change || 0
-                        else if (balance.asset === 'DOGE') change = cryptoPrices.dogecoin?.usd_24h_change || 0
+                        const change = get24hChange(balance.asset)
                         
                         return (
-                          <div key={balance.asset} className="flex items-center justify-between p-4 rounded-xl bg-white/5">
+                          <div key={balance.asset} className="flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all">
                             <div className="flex items-center space-x-3">
                               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
                                 <span className="text-white font-bold text-sm">{balance.asset}</span>
@@ -653,7 +660,7 @@ export default function DashboardPage() {
                   ) : (
                     <div className="space-y-3">
                       {transactions.slice(0, 5).map(tx => (
-                        <div key={tx.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5">
+                        <div key={tx.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all">
                           <div className="flex items-center space-x-3">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                               tx.type === 'deposit' ? 'bg-green-500/20' : 'bg-red-500/20'
@@ -771,7 +778,7 @@ export default function DashboardPage() {
                 {withdrawSuccess && (
                   <div className="mb-6 p-4 rounded-xl bg-green-500/20 border border-green-500/30 flex items-start space-x-3">
                     <CheckCircle className="w-5 h-5 text-green-400" />
-                    <p className="text-green-400 font-medium">Withdrawal request submitted!</p>
+                    <p className="text-green-400 font-medium">Withdrawal request submitted successfully!</p>
                   </div>
                 )}
 
@@ -804,7 +811,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Available Balance */}
+                {/* Total Available Balance */}
                 <div className="mb-6 p-6 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30">
                   <p className="text-gray-400 text-sm mb-1">Total Available Balance</p>
                   <p className="text-3xl font-bold text-white">
@@ -825,6 +832,11 @@ export default function DashboardPage() {
                       <option value="BTC">BTC</option>
                       <option value="ETH">ETH</option>
                       <option value="USDT">USDT</option>
+                      <option value="SOL">SOL</option>
+                      <option value="ADA">ADA</option>
+                      <option value="BNB">BNB</option>
+                      <option value="XRP">XRP</option>
+                      <option value="DOGE">DOGE</option>
                     </select>
                   </div>
 
@@ -863,7 +875,7 @@ export default function DashboardPage() {
                   <button
                     type="submit"
                     disabled={withdrawLoading}
-                    className="w-full py-4 rounded-xl bg-gradient-to-r from-red-500 to-orange-500 text-white font-medium hover:shadow-lg disabled:opacity-50 flex items-center justify-center space-x-2"
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-red-500 to-orange-500 text-white font-medium hover:shadow-lg disabled:opacity-50 flex items-center justify-center space-x-2 transition-all"
                   >
                     {withdrawLoading ? (
                       <>
@@ -931,7 +943,7 @@ export default function DashboardPage() {
                 ) : (
                   <div className="space-y-3">
                     {filteredTransactions.map(tx => (
-                      <div key={tx.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5">
+                      <div key={tx.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all">
                         <div className="flex items-center space-x-3">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                             tx.type === 'deposit' ? 'bg-green-500/20' : 'bg-red-500/20'
@@ -971,8 +983,11 @@ export default function DashboardPage() {
                   <div className="glass-effect rounded-xl p-6 border border-white/10">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-bold text-white">Bitcoin (BTC)</h3>
-                      <div className="text-green-400 text-sm">
-                        +{(cryptoPrices.bitcoin?.usd_24h_change || 0).toFixed(2)}%
+                      <div className={`text-sm ${
+                        (cryptoPrices.bitcoin?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {(cryptoPrices.bitcoin?.usd_24h_change || 0) >= 0 ? '+' : ''}
+                        {(cryptoPrices.bitcoin?.usd_24h_change || 0).toFixed(2)}%
                       </div>
                     </div>
                     <p className="text-3xl font-bold text-white">
@@ -984,8 +999,11 @@ export default function DashboardPage() {
                   <div className="glass-effect rounded-xl p-6 border border-white/10">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-bold text-white">Ethereum (ETH)</h3>
-                      <div className="text-green-400 text-sm">
-                        +{(cryptoPrices.ethereum?.usd_24h_change || 0).toFixed(2)}%
+                      <div className={`text-sm ${
+                        (cryptoPrices.ethereum?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {(cryptoPrices.ethereum?.usd_24h_change || 0) >= 0 ? '+' : ''}
+                        {(cryptoPrices.ethereum?.usd_24h_change || 0).toFixed(2)}%
                       </div>
                     </div>
                     <p className="text-3xl font-bold text-white">
