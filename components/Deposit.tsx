@@ -7,9 +7,9 @@ import { motion } from 'framer-motion'
 
 // 🔧 DEMO WALLET ADDRESSES - Replace with your actual wallet addresses
 const CRYPTO_WALLETS = {
-  BTC: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-  ETH: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
-  USDT: 'TYDzsYUEpvnYmQk4zGP9sWWcTEd2MiAtW6',
+  BTC: 'bc1qjwpl49rh53p3s7euxq9t074mfxmtxue70rzve6',
+  ETH: '0xba99397e779F619FbEaAc6f1924f2F0cd79134EA',
+  USDT: '0xba99397e779F619FbEaAc6f1924f2F0cd79134EA',
   SOL: '7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV',
   ADA: 'addr1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlhxu56se8d2v',
   BNB: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
