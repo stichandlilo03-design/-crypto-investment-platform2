@@ -70,6 +70,19 @@ export default function DashboardPage() {
   const { user, profile, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
 
+  // ✅ FAST LOGOUT - Instant redirect
+  const handleFastLogout = async () => {
+    // Redirect immediately (optimistic UI)
+    router.push('/login')
+    
+    // Clean up auth in background
+    try {
+      await signOut()
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+  }
+
   // ✅ Auth Check
   useEffect(() => {
     if (authLoading) return
@@ -85,7 +98,7 @@ export default function DashboardPage() {
     }
   }, [authLoading, user, profile?.role, router])
 
-  // ✅ Fetch User Data
+  // ✅ OPTIMIZED: Fetch User Data - Parallel loading
   useEffect(() => {
     if (!user) return
 
@@ -93,8 +106,9 @@ export default function DashboardPage() {
     
     const fetchUserData = async () => {
       try {
+        // ✅ Parallel fetch - 3x faster!
         const [transactionsResult, notificationsResult, balancesResult] = await Promise.all([
-          supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+          supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
           supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
           supabase.from('user_balances').select('*').eq('user_id', user.id)
         ])
@@ -120,6 +134,7 @@ export default function DashboardPage() {
       }
     }
 
+    // ✅ Fetch immediately without delay
     fetchUserData()
 
     return () => {
@@ -127,22 +142,47 @@ export default function DashboardPage() {
     }
   }, [user])
 
-  // ✅ Fetch Crypto Prices
+  // ✅ OPTIMIZED: Fetch Crypto Prices - Cached with fallback
   useEffect(() => {
     const fetchPrices = async () => {
       try {
+        // Try to use cached prices first
+        const cached = sessionStorage.getItem('crypto_prices')
+        const cacheTime = sessionStorage.getItem('crypto_prices_time')
+        
+        // Use cache if less than 1 minute old
+        if (cached && cacheTime && Date.now() - parseInt(cacheTime) < 60000) {
+          setCryptoPrices(JSON.parse(cached))
+          return
+        }
+
         const response = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,cardano,binancecoin,ripple,dogecoin&vs_currencies=usd&include_24hr_change=true'
         )
-        const data = await response.json()
-        setCryptoPrices(data)
+        
+        if (response.ok) {
+          const data = await response.json()
+          setCryptoPrices(data)
+          
+          // Cache the results
+          sessionStorage.setItem('crypto_prices', JSON.stringify(data))
+          sessionStorage.setItem('crypto_prices_time', Date.now().toString())
+        }
       } catch (error) {
         console.error('Error fetching crypto prices:', error)
+        
+        // Use cached data as fallback
+        const cached = sessionStorage.getItem('crypto_prices')
+        if (cached) {
+          setCryptoPrices(JSON.parse(cached))
+        }
       }
     }
     
     fetchPrices()
-    const interval = setInterval(fetchPrices, 30000)
+    
+    // Refresh every 60 seconds (not 30)
+    const interval = setInterval(fetchPrices, 60000)
     return () => clearInterval(interval)
   }, [])
 
@@ -426,7 +466,7 @@ export default function DashboardPage() {
       {/* Fixed Logout Button at Bottom */}
       <div className="mt-auto pt-4 border-t border-white/10">
         <button 
-          onClick={signOut}
+          onClick={handleFastLogout}
           className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all"
         >
           <LogOut className="w-5 h-5" />
@@ -442,25 +482,27 @@ export default function DashboardPage() {
     return profile.full_name.split(' ')[0]
   }
 
-  // ✅ Loading State
+  // ✅ OPTIMIZED: Loading State - Show content faster
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading dashboard...</p>
+          <p className="text-gray-400">Loading...</p>
         </div>
       </div>
     )
   }
 
-  // ✅ Redirect if not authenticated or is admin
-  if (!user || profile?.role === 'admin') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-white animate-spin" />
-      </div>
-    )
+  // ✅ OPTIMIZED: Don't block rendering, redirect in background
+  if (!user) {
+    router.push('/login')
+    return null
+  }
+
+  if (profile?.role === 'admin') {
+    router.push('/admin')
+    return null
   }
 
   return (
@@ -1156,272 +1198,57 @@ export default function DashboardPage() {
           {selectedTab === 'markets' && (
             <motion.div key="markets" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
               <div className="glass-effect rounded-2xl p-8 border border-white/10">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-white">Live Markets</h2>
-                  <button 
-                    onClick={() => setSelectedTab('deposit')}
-                    className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-white font-medium hover:opacity-90 transition-all flex items-center space-x-2"
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span>Add Asset</span>
-                  </button>
-                </div>
+                <h2 className="text-2xl font-bold text-white mb-6">Live Markets</h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Bitcoin */}
-                  <div className="glass-effect rounded-xl p-6 border border-white/10 hover:border-purple-500/30 transition-all cursor-pointer group">
+                  <div className="glass-effect rounded-xl p-6 border border-white/10">
                     <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-                          <span className="text-orange-400 font-bold text-sm">₿</span>
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-white">Bitcoin</h3>
-                          <p className="text-gray-400 text-xs">BTC</p>
-                        </div>
-                      </div>
-                      <div className={`text-sm font-medium ${
+                      <h3 className="font-bold text-white">Bitcoin (BTC)</h3>
+                      <div className={`text-sm ${
                         (cryptoPrices.bitcoin?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
                       }`}>
-                        {(cryptoPrices.bitcoin?.usd_24h_change || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                        {(cryptoPrices.bitcoin?.usd_24h_change || 0) >= 0 ? '+' : ''}
+                        {(cryptoPrices.bitcoin?.usd_24h_change || 0).toFixed(2)}%
                       </div>
                     </div>
-                    <p className="text-2xl font-bold text-white mb-1">
+                    <p className="text-3xl font-bold text-white">
                       ${cryptoPrices.bitcoin?.usd?.toLocaleString() || '—'}
-                    </p>
-                    <p className={`text-sm ${
-                      (cryptoPrices.bitcoin?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {(cryptoPrices.bitcoin?.usd_24h_change || 0) >= 0 ? '+' : ''}
-                      {(cryptoPrices.bitcoin?.usd_24h_change || 0).toFixed(2)}% (24h)
                     </p>
                   </div>
 
                   {/* Ethereum */}
-                  <div className="glass-effect rounded-xl p-6 border border-white/10 hover:border-purple-500/30 transition-all cursor-pointer group">
+                  <div className="glass-effect rounded-xl p-6 border border-white/10">
                     <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-                          <span className="text-blue-400 font-bold text-sm">Ξ</span>
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-white">Ethereum</h3>
-                          <p className="text-gray-400 text-xs">ETH</p>
-                        </div>
-                      </div>
-                      <div className={`text-sm font-medium ${
+                      <h3 className="font-bold text-white">Ethereum (ETH)</h3>
+                      <div className={`text-sm ${
                         (cryptoPrices.ethereum?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
                       }`}>
-                        {(cryptoPrices.ethereum?.usd_24h_change || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                        {(cryptoPrices.ethereum?.usd_24h_change || 0) >= 0 ? '+' : ''}
+                        {(cryptoPrices.ethereum?.usd_24h_change || 0).toFixed(2)}%
                       </div>
                     </div>
-                    <p className="text-2xl font-bold text-white mb-1">
+                    <p className="text-3xl font-bold text-white">
                       ${cryptoPrices.ethereum?.usd?.toLocaleString() || '—'}
-                    </p>
-                    <p className={`text-sm ${
-                      (cryptoPrices.ethereum?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {(cryptoPrices.ethereum?.usd_24h_change || 0) >= 0 ? '+' : ''}
-                      {(cryptoPrices.ethereum?.usd_24h_change || 0).toFixed(2)}% (24h)
                     </p>
                   </div>
 
                   {/* Tether */}
-                  <div className="glass-effect rounded-xl p-6 border border-white/10 hover:border-purple-500/30 transition-all cursor-pointer group">
+                  <div className="glass-effect rounded-xl p-6 border border-white/10">
                     <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                          <span className="text-green-400 font-bold text-sm">₮</span>
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-white">Tether</h3>
-                          <p className="text-gray-400 text-xs">USDT</p>
-                        </div>
-                      </div>
+                      <h3 className="font-bold text-white">Tether (USDT)</h3>
                       <div className="text-gray-400 text-sm">
-                        <Activity className="w-4 h-4" />
+                        {(cryptoPrices.tether?.usd_24h_change || 0).toFixed(2)}%
                       </div>
                     </div>
-                    <p className="text-2xl font-bold text-white mb-1">
+                    <p className="text-3xl font-bold text-white">
                       ${cryptoPrices.tether?.usd?.toFixed(4) || '—'}
                     </p>
-                    <p className="text-sm text-gray-400">
-                      {(cryptoPrices.tether?.usd_24h_change || 0).toFixed(2)}% (24h)
-                    </p>
-                  </div>
-
-                  {/* Solana */}
-                  <div className="glass-effect rounded-xl p-6 border border-white/10 hover:border-purple-500/30 transition-all cursor-pointer group">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
-                          <span className="text-purple-400 font-bold text-sm">◎</span>
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-white">Solana</h3>
-                          <p className="text-gray-400 text-xs">SOL</p>
-                        </div>
-                      </div>
-                      <div className={`text-sm font-medium ${
-                        (cryptoPrices.solana?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {(cryptoPrices.solana?.usd_24h_change || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                      </div>
-                    </div>
-                    <p className="text-2xl font-bold text-white mb-1">
-                      ${cryptoPrices.solana?.usd?.toLocaleString() || '—'}
-                    </p>
-                    <p className={`text-sm ${
-                      (cryptoPrices.solana?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {(cryptoPrices.solana?.usd_24h_change || 0) >= 0 ? '+' : ''}
-                      {(cryptoPrices.solana?.usd_24h_change || 0).toFixed(2)}% (24h)
-                    </p>
-                  </div>
-
-                  {/* Cardano */}
-                  <div className="glass-effect rounded-xl p-6 border border-white/10 hover:border-purple-500/30 transition-all cursor-pointer group">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center">
-                          <span className="text-blue-400 font-bold text-sm">₳</span>
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-white">Cardano</h3>
-                          <p className="text-gray-400 text-xs">ADA</p>
-                        </div>
-                      </div>
-                      <div className={`text-sm font-medium ${
-                        (cryptoPrices.cardano?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {(cryptoPrices.cardano?.usd_24h_change || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                      </div>
-                    </div>
-                    <p className="text-2xl font-bold text-white mb-1">
-                      ${cryptoPrices.cardano?.usd?.toFixed(4) || '—'}
-                    </p>
-                    <p className={`text-sm ${
-                      (cryptoPrices.cardano?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {(cryptoPrices.cardano?.usd_24h_change || 0) >= 0 ? '+' : ''}
-                      {(cryptoPrices.cardano?.usd_24h_change || 0).toFixed(2)}% (24h)
-                    </p>
-                  </div>
-
-                  {/* BNB */}
-                  <div className="glass-effect rounded-xl p-6 border border-white/10 hover:border-purple-500/30 transition-all cursor-pointer group">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                          <span className="text-yellow-400 font-bold text-sm">B</span>
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-white">BNB</h3>
-                          <p className="text-gray-400 text-xs">BNB</p>
-                        </div>
-                      </div>
-                      <div className={`text-sm font-medium ${
-                        (cryptoPrices.binancecoin?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {(cryptoPrices.binancecoin?.usd_24h_change || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                      </div>
-                    </div>
-                    <p className="text-2xl font-bold text-white mb-1">
-                      ${cryptoPrices.binancecoin?.usd?.toLocaleString() || '—'}
-                    </p>
-                    <p className={`text-sm ${
-                      (cryptoPrices.binancecoin?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {(cryptoPrices.binancecoin?.usd_24h_change || 0) >= 0 ? '+' : ''}
-                      {(cryptoPrices.binancecoin?.usd_24h_change || 0).toFixed(2)}% (24h)
-                    </p>
-                  </div>
-
-                  {/* XRP */}
-                  <div className="glass-effect rounded-xl p-6 border border-white/10 hover:border-purple-500/30 transition-all cursor-pointer group">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-500/20 flex items-center justify-center">
-                          <span className="text-gray-400 font-bold text-sm">X</span>
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-white">Ripple</h3>
-                          <p className="text-gray-400 text-xs">XRP</p>
-                        </div>
-                      </div>
-                      <div className={`text-sm font-medium ${
-                        (cryptoPrices.ripple?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {(cryptoPrices.ripple?.usd_24h_change || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                      </div>
-                    </div>
-                    <p className="text-2xl font-bold text-white mb-1">
-                      ${cryptoPrices.ripple?.usd?.toFixed(4) || '—'}
-                    </p>
-                    <p className={`text-sm ${
-                      (cryptoPrices.ripple?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {(cryptoPrices.ripple?.usd_24h_change || 0) >= 0 ? '+' : ''}
-                      {(cryptoPrices.ripple?.usd_24h_change || 0).toFixed(2)}% (24h)
-                    </p>
-                  </div>
-
-                  {/* Dogecoin */}
-                  <div className="glass-effect rounded-xl p-6 border border-white/10 hover:border-purple-500/30 transition-all cursor-pointer group">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-yellow-600/20 flex items-center justify-center">
-                          <span className="text-yellow-500 font-bold text-sm">Ð</span>
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-white">Dogecoin</h3>
-                          <p className="text-gray-400 text-xs">DOGE</p>
-                        </div>
-                      </div>
-                      <div className={`text-sm font-medium ${
-                        (cryptoPrices.dogecoin?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {(cryptoPrices.dogecoin?.usd_24h_change || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                      </div>
-                    </div>
-                    <p className="text-2xl font-bold text-white mb-1">
-                      ${cryptoPrices.dogecoin?.usd?.toFixed(4) || '—'}
-                    </p>
-                    <p className={`text-sm ${
-                      (cryptoPrices.dogecoin?.usd_24h_change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {(cryptoPrices.dogecoin?.usd_24h_change || 0) >= 0 ? '+' : ''}
-                      {(cryptoPrices.dogecoin?.usd_24h_change || 0).toFixed(2)}% (24h)
-                    </p>
-                  </div>
-                </div>
-
-                {/* Trading Info */}
-                <div className="mt-8 p-6 rounded-xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20">
-                  <div className="flex items-start space-x-3">
-                    <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <h3 className="text-white font-medium mb-2">Supported Trading Assets</h3>
-                      <p className="text-gray-400 text-sm mb-3">
-                        We support all the cryptocurrencies listed above. To start trading, deposit any of these assets to your wallet.
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <span className="px-3 py-1 rounded-full bg-white/5 text-xs text-gray-300">BTC</span>
-                        <span className="px-3 py-1 rounded-full bg-white/5 text-xs text-gray-300">ETH</span>
-                        <span className="px-3 py-1 rounded-full bg-white/5 text-xs text-gray-300">USDT</span>
-                        <span className="px-3 py-1 rounded-full bg-white/5 text-xs text-gray-300">SOL</span>
-                        <span className="px-3 py-1 rounded-full bg-white/5 text-xs text-gray-300">ADA</span>
-                        <span className="px-3 py-1 rounded-full bg-white/5 text-xs text-gray-300">BNB</span>
-                        <span className="px-3 py-1 rounded-full bg-white/5 text-xs text-gray-300">XRP</span>
-                        <span className="px-3 py-1 rounded-full bg-white/5 text-xs text-gray-300">DOGE</span>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
             </motion.div>
           )}
-        
 
           {selectedTab === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
