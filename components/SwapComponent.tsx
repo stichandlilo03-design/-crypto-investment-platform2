@@ -6,8 +6,8 @@ import { supabase } from '@/lib/supabase/client'
 import { motion } from 'framer-motion'
 
 export default function SwapComponent() {
-  const [fromAsset, setFromAsset] = useState('BTC')
-  const [toAsset, setToAsset] = useState('ETH')
+  const [fromAsset, setFromAsset] = useState('USD')
+  const [toAsset, setToAsset] = useState('BTC')
   const [fromAmount, setFromAmount] = useState('')
   const [toAmount, setToAmount] = useState('0.00000000')
   const [loading, setLoading] = useState(false)
@@ -18,6 +18,7 @@ export default function SwapComponent() {
   const [pricesLoading, setPricesLoading] = useState(true)
 
   const assets = [
+    { symbol: 'USD', name: 'US Dollar' },
     { symbol: 'BTC', name: 'Bitcoin' },
     { symbol: 'ETH', name: 'Ethereum' },
     { symbol: 'USDT', name: 'Tether' },
@@ -57,20 +58,33 @@ export default function SwapComponent() {
 
   const fetchPrices = async () => {
     try {
-      const response = await fetch('/api/crypto-prices?symbols=BTC,ETH,USDT,SOL,ADA,BNB')
+      const response = await fetch('/api/crypto-prices?symbols=BTC,ETH,USDT,SOL,ADA,BNB,USD')
       const data = await response.json()
       
       if (data.success) {
-        setCryptoPrices(data.prices)
+        // Add USD manually if not returned
+        const prices = { ...data.prices }
+        if (!prices.USD) {
+          prices.USD = { price: 1, change24h: 0 }
+        }
+        setCryptoPrices(prices)
       }
       setPricesLoading(false)
     } catch (error) {
       console.error('Error fetching prices:', error)
+      // Fallback with USD
+      setCryptoPrices({
+        USD: { price: 1, change24h: 0 },
+        BTC: { price: 95000, change24h: 2.5 },
+        ETH: { price: 3300, change24h: 1.8 },
+        USDT: { price: 1, change24h: 0 }
+      })
       setPricesLoading(false)
     }
   }
 
   const getAssetPrice = (asset: string): number => {
+    if (asset === 'USD') return 1
     return cryptoPrices[asset]?.price || 0
   }
 
