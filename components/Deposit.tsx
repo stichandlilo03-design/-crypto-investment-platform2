@@ -19,7 +19,7 @@ const CRYPTO_WALLETS = {
 
 // 🏦 BANK TRANSFER DETAILS - Replace with your actual bank details
 const BANK_INFO = {
-  bankName: 'JPMorgan Chase Bank',
+  bankName: 'Sofi Bank',
   accountName: 'CryptoVault Holdings LLC',
   accountNumber: '1234567890',
   routingNumber: '021000021',
@@ -77,7 +77,7 @@ export default function Deposit() {
       setCryptoPrices({
         BTC: { price: 42000, change24h: 0 },
         ETH: { price: 3300, change24h: 0 },
-        USDT: { price: 1, change24h: 0 },
+        USDT ERC 20: { price: 1, change24h: 0 },
         USD: { price: 1, change24h: 0 }
       })
       setPricesLoading(false)
