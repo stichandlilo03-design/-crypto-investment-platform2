@@ -10,7 +10,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase/client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import PortfolioOverview from '@/components/PortfolioOverview'
 import SwapComponent from '@/components/SwapComponent'
 import Deposit from '@/components/Deposit'
@@ -32,6 +32,18 @@ interface UserBalance {
   average_buy_price: number
 }
 
+// ✅ HARDCODED FALLBACK PRICES - Always available!
+const FALLBACK_PRICES: CryptoPrices = {
+  bitcoin: { usd: 95000, usd_24h_change: 2.5 },
+  ethereum: { usd: 3300, usd_24h_change: 1.8 },
+  tether: { usd: 1.00, usd_24h_change: 0.01 },
+  solana: { usd: 180, usd_24h_change: 3.2 },
+  cardano: { usd: 0.65, usd_24h_change: -1.5 },
+  binancecoin: { usd: 620, usd_24h_change: 1.2 },
+  ripple: { usd: 2.80, usd_24h_change: 4.1 },
+  dogecoin: { usd: 0.38, usd_24h_change: -0.8 }
+}
+
 export default function DashboardPage() {
   // UI State
   const [hideBalance, setHideBalance] = useState(false)
@@ -40,7 +52,8 @@ export default function DashboardPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   
   // Data State
-  const [cryptoPrices, setCryptoPrices] = useState<CryptoPrices>({})
+  const [cryptoPrices, setCryptoPrices] = useState<CryptoPrices>(FALLBACK_PRICES) // ✅ Start with fallback
+  const [pricesLoaded, setPricesLoaded] = useState(false) // ✅ Track if API prices loaded
   const [loading, setLoading] = useState(true)
   const [transactions, setTransactions] = useState<any[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
@@ -70,12 +83,9 @@ export default function DashboardPage() {
   const { user, profile, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
 
-  // ✅ FAST LOGOUT - Instant redirect
+  // ✅ INSTANT LOGOUT - No waiting!
   const handleFastLogout = async () => {
-    // Redirect immediately (optimistic UI)
     router.push('/login')
-    
-    // Clean up auth in background
     try {
       await signOut()
     } catch (error) {
@@ -86,12 +96,10 @@ export default function DashboardPage() {
   // ✅ Auth Check
   useEffect(() => {
     if (authLoading) return
-
     if (!user) {
       router.push('/login')
       return
     }
-
     if (profile?.role === 'admin') {
       router.push('/admin')
       return
@@ -106,7 +114,6 @@ export default function DashboardPage() {
     
     const fetchUserData = async () => {
       try {
-        // ✅ Parallel fetch - 3x faster!
         const [transactionsResult, notificationsResult, balancesResult] = await Promise.all([
           supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
           supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
@@ -134,7 +141,6 @@ export default function DashboardPage() {
       }
     }
 
-    // ✅ Fetch immediately without delay
     fetchUserData()
 
     return () => {
@@ -142,46 +148,65 @@ export default function DashboardPage() {
     }
   }, [user])
 
-  // ✅ OPTIMIZED: Fetch Crypto Prices - Cached with fallback
+  // ✅ ULTRA-OPTIMIZED: Fetch Crypto Prices - Multi-layer fallback
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        // Try to use cached prices first
+        // Check cache first (instant!)
         const cached = sessionStorage.getItem('crypto_prices')
         const cacheTime = sessionStorage.getItem('crypto_prices_time')
         
-        // Use cache if less than 1 minute old
         if (cached && cacheTime && Date.now() - parseInt(cacheTime) < 60000) {
-          setCryptoPrices(JSON.parse(cached))
+          const cachedData = JSON.parse(cached)
+          setCryptoPrices(cachedData)
+          setPricesLoaded(true)
+          console.log('✅ Using cached prices')
           return
         }
 
+        console.log('🔄 Fetching fresh prices...')
+        
         const response = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,cardano,binancecoin,ripple,dogecoin&vs_currencies=usd&include_24hr_change=true'
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,cardano,binancecoin,ripple,dogecoin&vs_currencies=usd&include_24hr_change=true',
+          { cache: 'no-cache' }
         )
         
         if (response.ok) {
           const data = await response.json()
-          setCryptoPrices(data)
           
-          // Cache the results
-          sessionStorage.setItem('crypto_prices', JSON.stringify(data))
-          sessionStorage.setItem('crypto_prices_time', Date.now().toString())
+          // Verify data is valid
+          if (data && data.bitcoin && data.bitcoin.usd) {
+            console.log('✅ Fresh prices loaded:', data)
+            setCryptoPrices(data)
+            setPricesLoaded(true)
+            
+            // Cache it
+            sessionStorage.setItem('crypto_prices', JSON.stringify(data))
+            sessionStorage.setItem('crypto_prices_time', Date.now().toString())
+          } else {
+            throw new Error('Invalid price data')
+          }
+        } else {
+          throw new Error(`HTTP ${response.status}`)
         }
       } catch (error) {
-        console.error('Error fetching crypto prices:', error)
+        console.error('❌ Price fetch error:', error)
         
-        // Use cached data as fallback
+        // Try old cache
         const cached = sessionStorage.getItem('crypto_prices')
         if (cached) {
+          console.log('⚠️ Using old cache')
           setCryptoPrices(JSON.parse(cached))
+          setPricesLoaded(true)
+        } else {
+          console.log('⚠️ Using fallback prices')
+          setCryptoPrices(FALLBACK_PRICES)
+          setPricesLoaded(true)
         }
       }
     }
     
     fetchPrices()
-    
-    // Refresh every 60 seconds (not 30)
     const interval = setInterval(fetchPrices, 60000)
     return () => clearInterval(interval)
   }, [])
@@ -202,7 +227,7 @@ export default function DashboardPage() {
     }
   }, [withdrawUsdAmount, withdrawAsset, cryptoPrices])
 
-  // ✅ Get asset price with proper mapping
+  // ✅ ULTRA-SMART: Get asset price with perfect mapping
   const getAssetPrice = (asset: string): number => {
     if (asset === 'USD') return 1
     
@@ -217,13 +242,24 @@ export default function DashboardPage() {
       'DOGE': 'dogecoin'
     }
     
-    const coinGeckoId = assetMap[asset] || asset.toLowerCase()
-    return cryptoPrices[coinGeckoId]?.usd || 0
+    const coinGeckoId = assetMap[asset]
+    if (!coinGeckoId) {
+      console.warn(`Unknown asset: ${asset}`)
+      return 0
+    }
+    
+    const priceData = cryptoPrices[coinGeckoId]
+    if (!priceData || !priceData.usd) {
+      console.warn(`No price for ${asset}`)
+      return 0
+    }
+    
+    return priceData.usd
   }
 
-  // ✅ Calculate Total Balance from user_balances
-  const calculateTotalBalance = () => {
-    if (!userBalances.length) return 0
+  // ✅ MEMOIZED: Calculate Total Balance (no recalculation on every render!)
+  const calculateTotalBalance = useMemo(() => {
+    if (!userBalances.length || !pricesLoaded) return 0
     
     const total = userBalances.reduce((sum, balance) => {
       const assetPrice = getAssetPrice(balance.asset)
@@ -232,7 +268,7 @@ export default function DashboardPage() {
     }, 0)
     
     return total
-  }
+  }, [userBalances, cryptoPrices, pricesLoaded])
 
   // ✅ Calculate available balance for specific asset
   const getAvailableBalance = (asset: string): number => {
@@ -240,21 +276,21 @@ export default function DashboardPage() {
     return balance ? Number(balance.amount) : 0
   }
 
-  // ✅ Calculate Total Deposits
-  const calculateTotalDeposits = () => {
+  // ✅ MEMOIZED: Calculate Total Deposits
+  const calculateTotalDeposits = useMemo(() => {
     const depositTransactions = transactions.filter(tx => 
       tx.type === 'deposit' && tx.status === 'approved'
     )
     return depositTransactions.reduce((total, tx) => total + Number(tx.value_usd || tx.amount), 0)
-  }
+  }, [transactions])
 
-  // ✅ Calculate Total Withdrawals
-  const calculateTotalWithdrawals = () => {
+  // ✅ MEMOIZED: Calculate Total Withdrawals
+  const calculateTotalWithdrawals = useMemo(() => {
     const withdrawalTransactions = transactions.filter(tx => 
       tx.type === 'withdraw' && tx.status === 'approved'
     )
     return withdrawalTransactions.reduce((total, tx) => total + Number(tx.value_usd || tx.amount), 0)
-  }
+  }, [transactions])
 
   // ✅ Handle Withdrawal
   const handleWithdrawal = async (e: React.FormEvent) => {
@@ -272,7 +308,6 @@ export default function DashboardPage() {
       if (!usdAmount || usdAmount <= 0) throw new Error('Invalid USD amount')
       if (!cryptoAmount || cryptoAmount <= 0) throw new Error('Invalid crypto amount')
 
-      // Check if user has enough balance for this asset
       const availableBalance = getAvailableBalance(withdrawAsset)
       
       if (withdrawAsset === 'USD') {
@@ -285,11 +320,9 @@ export default function DashboardPage() {
         }
       }
 
-      // ✅ Prepare wallet/bank details
       let walletOrBankDetails = ''
       
       if (withdrawAsset === 'USD') {
-        // Store bank details for USD withdrawals
         if (!bankName || !accountHolderName || !accountNumber || !routingNumber) {
           throw new Error('Please fill in all required bank account details')
         }
@@ -303,14 +336,12 @@ export default function DashboardPage() {
           swiftCode: swiftCode || null
         })
       } else {
-        // Store wallet address for crypto withdrawals
         if (!withdrawAddress) {
           throw new Error('Please enter your wallet address')
         }
         walletOrBankDetails = withdrawAddress
       }
 
-      // ✅ INSERT WITHDRAWAL WITH CORRECT AMOUNTS
       const { error: insertError } = await supabase
         .from('transactions')
         .insert([
@@ -318,8 +349,8 @@ export default function DashboardPage() {
             user_id: user.id,
             type: 'withdraw',
             asset: withdrawAsset,
-            amount: cryptoAmount,  // Crypto amount
-            value_usd: usdAmount,  // USD value
+            amount: cryptoAmount,
+            value_usd: usdAmount,
             status: 'pending',
             wallet_address: walletOrBankDetails
           }
@@ -368,17 +399,19 @@ export default function DashboardPage() {
     }
   }
 
-  // ✅ Filter Transactions
-  const filteredTransactions = transactions.filter(tx => {
-    const matchesSearch = searchQuery === '' || 
-      tx.asset?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tx.type?.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    const matchesStatus = filterStatus === 'all' || tx.status === filterStatus
-    const matchesType = filterType === 'all' || tx.type === filterType
-    
-    return matchesSearch && matchesStatus && matchesType
-  })
+  // ✅ MEMOIZED: Filter Transactions
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => {
+      const matchesSearch = searchQuery === '' || 
+        tx.asset?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tx.type?.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      const matchesStatus = filterStatus === 'all' || tx.status === filterStatus
+      const matchesType = filterType === 'all' || tx.type === filterType
+      
+      return matchesSearch && matchesStatus && matchesType
+    })
+  }, [transactions, searchQuery, filterStatus, filterType])
 
   // ✅ Format Currency
   const formatCurrency = (amount: number) => {
@@ -420,18 +453,22 @@ export default function DashboardPage() {
   const get24hChange = (asset: string): number => {
     if (asset === 'USD') return 0
     
-    const changeMap: { [key: string]: number } = {
-      'BTC': cryptoPrices.bitcoin?.usd_24h_change || 0,
-      'ETH': cryptoPrices.ethereum?.usd_24h_change || 0,
-      'USDT': cryptoPrices.tether?.usd_24h_change || 0,
-      'SOL': cryptoPrices.solana?.usd_24h_change || 0,
-      'ADA': cryptoPrices.cardano?.usd_24h_change || 0,
-      'BNB': cryptoPrices.binancecoin?.usd_24h_change || 0,
-      'XRP': cryptoPrices.ripple?.usd_24h_change || 0,
-      'DOGE': cryptoPrices.dogecoin?.usd_24h_change || 0
+    const assetMap: { [key: string]: string } = {
+      'BTC': 'bitcoin',
+      'ETH': 'ethereum',
+      'USDT': 'tether',
+      'SOL': 'solana',
+      'ADA': 'cardano',
+      'BNB': 'binancecoin',
+      'XRP': 'ripple',
+      'DOGE': 'dogecoin'
     }
     
-    return changeMap[asset] || 0
+    const coinGeckoId = assetMap[asset]
+    if (!coinGeckoId) return 0
+    
+    const priceData = cryptoPrices[coinGeckoId]
+    return priceData?.usd_24h_change || 0
   }
 
   // ✅ Navigation Items
@@ -463,7 +500,6 @@ export default function DashboardPage() {
         ))}
       </div>
       
-      {/* Fixed Logout Button at Bottom */}
       <div className="mt-auto pt-4 border-t border-white/10">
         <button 
           onClick={handleFastLogout}
@@ -482,7 +518,7 @@ export default function DashboardPage() {
     return profile.full_name.split(' ')[0]
   }
 
-  // ✅ OPTIMIZED: Loading State - Show content faster
+  // ✅ Loading State
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] flex items-center justify-center">
@@ -494,7 +530,7 @@ export default function DashboardPage() {
     )
   }
 
-  // ✅ OPTIMIZED: Don't block rendering, redirect in background
+  // ✅ Redirect if not authenticated
   if (!user) {
     router.push('/login')
     return null
@@ -507,7 +543,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
-      {/* ✅ Desktop Sidebar - FIXED HEIGHT */}
+      {/* ✅ Desktop Sidebar */}
       <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40 flex-col">
         <div className="flex items-center space-x-2 mb-8">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -518,7 +554,7 @@ export default function DashboardPage() {
         <NavItems />
       </aside>
 
-      {/* ✅ Mobile Sidebar - FIXED HEIGHT */}
+      {/* ✅ Mobile Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
@@ -649,14 +685,16 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ✅ Content Area */}
+        {/* ✅ Content Area - NO SHAKING with will-change optimization */}
         <AnimatePresence mode="wait">
           {selectedTab === 'overview' && (
             <motion.div
               key="overview"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              style={{ willChange: 'opacity' }}
             >
               {/* Stats Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -666,9 +704,16 @@ export default function DashboardPage() {
                     <Wallet className="w-5 h-5 text-purple-400" />
                   </div>
                   <h3 className="text-3xl font-bold text-white mb-2">
-                    {hideBalance ? '••••••' : formatCurrency(calculateTotalBalance())}
+                    {hideBalance ? '••••••' : formatCurrency(calculateTotalBalance)}
                   </h3>
-                  <p className="text-green-400 text-sm">+0.00%</p>
+                  <p className="text-green-400 text-sm">
+                    {pricesLoaded ? '+0.00%' : (
+                      <span className="flex items-center text-gray-400">
+                        <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                        Loading...
+                      </span>
+                    )}
+                  </p>
                 </div>
 
                 <div className="glass-effect rounded-2xl p-6 border border-white/10">
@@ -677,7 +722,7 @@ export default function DashboardPage() {
                     <ArrowDownRight className="w-5 h-5 text-green-400" />
                   </div>
                   <h3 className="text-3xl font-bold text-white mb-2">
-                    {hideBalance ? '••••••' : formatCurrency(calculateTotalDeposits())}
+                    {hideBalance ? '••••••' : formatCurrency(calculateTotalDeposits)}
                   </h3>
                   <p className="text-gray-400 text-sm">
                     {transactions.filter(tx => tx.type === 'deposit').length} transactions
@@ -690,7 +735,7 @@ export default function DashboardPage() {
                     <ArrowUpRight className="w-5 h-5 text-red-400" />
                   </div>
                   <h3 className="text-3xl font-bold text-white mb-2">
-                    {hideBalance ? '••••••' : formatCurrency(calculateTotalWithdrawals())}
+                    {hideBalance ? '••••••' : formatCurrency(calculateTotalWithdrawals)}
                   </h3>
                   <p className="text-gray-400 text-sm">
                     {transactions.filter(tx => tx.type === 'withdraw').length} transactions
@@ -746,9 +791,14 @@ export default function DashboardPage() {
                             </div>
                             <div className="text-right">
                               <p className="font-medium text-white">
-                                {hideBalance ? '••••••' : formatCurrency(value)}
+                                {hideBalance ? '••••••' : pricesLoaded && price > 0 ? formatCurrency(value) : (
+                                  <span className="flex items-center space-x-1 text-gray-400 text-sm">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    <span>Loading...</span>
+                                  </span>
+                                )}
                               </p>
-                              {balance.asset !== 'USD' && (
+                              {balance.asset !== 'USD' && pricesLoaded && price > 0 && (
                                 <p className={`text-sm ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                   {change >= 0 ? '+' : ''}{change.toFixed(2)}%
                                 </p>
@@ -845,9 +895,10 @@ export default function DashboardPage() {
           {selectedTab === 'portfolio' && (
             <motion.div
               key="portfolio"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
             >
               <PortfolioOverview />
             </motion.div>
@@ -856,9 +907,10 @@ export default function DashboardPage() {
           {selectedTab === 'swap' && (
             <motion.div
               key="swap"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
             >
               <div className="max-w-lg mx-auto">
                 <SwapComponent />
@@ -869,9 +921,10 @@ export default function DashboardPage() {
           {selectedTab === 'deposit' && (
             <motion.div
               key="deposit"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
             >
               <Deposit />
             </motion.div>
@@ -880,9 +933,10 @@ export default function DashboardPage() {
           {selectedTab === 'withdraw' && (
             <motion.div
               key="withdraw"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
               className="max-w-4xl mx-auto"
             >
               <div className="glass-effect rounded-2xl p-8 border border-white/10">
@@ -928,7 +982,7 @@ export default function DashboardPage() {
                 <div className="mb-6 p-6 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30">
                   <p className="text-gray-400 text-sm mb-1">Total Available Balance</p>
                   <p className="text-3xl font-bold text-white">
-                    {hideBalance ? '••••••' : formatCurrency(calculateTotalBalance())}
+                    {hideBalance ? '••••••' : formatCurrency(calculateTotalBalance)}
                   </p>
                 </div>
 
@@ -1117,7 +1171,13 @@ export default function DashboardPage() {
           )}
 
           {selectedTab === 'transactions' && (
-            <motion.div key="transactions" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+            <motion.div 
+              key="transactions" 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
               <div className="glass-effect rounded-2xl p-8 border border-white/10">
                 <h2 className="text-2xl font-bold text-white mb-6">Transaction History</h2>
                 
@@ -1196,7 +1256,13 @@ export default function DashboardPage() {
           )}
 
           {selectedTab === 'markets' && (
-            <motion.div key="markets" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+            <motion.div 
+              key="markets" 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
               <div className="glass-effect rounded-2xl p-8 border border-white/10">
                 <h2 className="text-2xl font-bold text-white mb-6">Live Markets</h2>
                 
@@ -1251,7 +1317,13 @@ export default function DashboardPage() {
           )}
 
           {selectedTab === 'settings' && (
-            <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+            <motion.div 
+              key="settings" 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
               <div className="glass-effect rounded-2xl p-8 border border-white/10 max-w-2xl mx-auto">
                 <h2 className="text-2xl font-bold text-white mb-6">Settings</h2>
                 
