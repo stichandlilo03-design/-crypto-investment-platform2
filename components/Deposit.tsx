@@ -1,9 +1,32 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowDownCircle, Loader2, DollarSign, Bitcoin, AlertCircle, TrendingUp } from 'lucide-react'
+import { ArrowDownCircle, Loader2, DollarSign, Bitcoin, AlertCircle, TrendingUp, Copy, CheckCircle, Building, Wallet } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { motion } from 'framer-motion'
+
+// 🔧 DEMO WALLET ADDRESSES - Replace with your actual wallet addresses
+const CRYPTO_WALLETS = {
+  BTC: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+  ETH: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+  USDT: 'TYDzsYUEpvnYmQk4zGP9sWWcTEd2MiAtW6',
+  SOL: '7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV',
+  ADA: 'addr1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlhxu56se8d2v',
+  BNB: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+  XRP: 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh',
+  DOGE: 'DH5yaieqoZN36fDVciNyRueRGvGLR3mr7L'
+}
+
+// 🏦 BANK TRANSFER DETAILS - Replace with your actual bank details
+const BANK_INFO = {
+  bankName: 'JPMorgan Chase Bank',
+  accountName: 'CryptoVault Holdings LLC',
+  accountNumber: '1234567890',
+  routingNumber: '021000021',
+  swiftCode: 'CHASUS33',
+  iban: 'US12 BANK 0000 1234 5678 90',
+  bankAddress: '270 Park Avenue, New York, NY 10017, USA'
+}
 
 export default function Deposit() {
   const [selectedAsset, setSelectedAsset] = useState('BTC')
@@ -15,8 +38,11 @@ export default function Deposit() {
   const [cryptoPrices, setCryptoPrices] = useState<any>({})
   const [pricesLoading, setPricesLoading] = useState(true)
   const [uploadingProof, setUploadingProof] = useState(false)
+  const [copied, setCopied] = useState('')
+  const [currentUser, setCurrentUser] = useState<any>(null)
 
   useEffect(() => {
+    fetchUser()
     fetchPrices()
     const interval = setInterval(fetchPrices, 30000)
     return () => clearInterval(interval)
@@ -25,6 +51,11 @@ export default function Deposit() {
   useEffect(() => {
     calculateCryptoAmount()
   }, [usdAmount, selectedAsset, cryptoPrices])
+
+  const fetchUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    setCurrentUser(user)
+  }
 
   const fetchPrices = async () => {
     try {
@@ -71,6 +102,12 @@ export default function Deposit() {
       marketPrice: price,
       cryptoCalculated: usd / price
     })
+  }
+
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(label)
+    setTimeout(() => setCopied(''), 2000)
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -246,7 +283,7 @@ export default function Deposit() {
   const isPriceUp = priceChange >= 0
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <div className="glass-effect rounded-2xl p-8 border border-white/10">
         <div className="flex items-center space-x-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
@@ -386,6 +423,191 @@ export default function Deposit() {
             </motion.div>
           )}
 
+          {/* 🆕 PAYMENT DETAILS SECTION */}
+          <div className="border-t border-white/10 pt-6">
+            {selectedAsset === 'USD' ? (
+              /* 🏦 BANK TRANSFER DETAILS */
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Building className="w-6 h-6 text-blue-400" />
+                  <h3 className="text-xl font-bold text-white">Bank Transfer Details</h3>
+                </div>
+
+                <div className="p-6 rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-600/10 border border-blue-500/20 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Bank Name */}
+                    <div>
+                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Bank Name</p>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
+                        <p className="text-white font-semibold">{BANK_INFO.bankName}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(BANK_INFO.bankName, 'bankName')}
+                          className="text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          {copied === 'bankName' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Account Name */}
+                    <div>
+                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Account Name</p>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
+                        <p className="text-white font-semibold">{BANK_INFO.accountName}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(BANK_INFO.accountName, 'accountName')}
+                          className="text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          {copied === 'accountName' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Account Number */}
+                    <div>
+                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Account Number</p>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
+                        <p className="text-white font-mono font-bold text-lg">{BANK_INFO.accountNumber}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(BANK_INFO.accountNumber, 'accountNumber')}
+                          className="text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          {copied === 'accountNumber' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Routing Number */}
+                    <div>
+                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Routing Number</p>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
+                        <p className="text-white font-mono font-bold text-lg">{BANK_INFO.routingNumber}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(BANK_INFO.routingNumber, 'routingNumber')}
+                          className="text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          {copied === 'routingNumber' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* SWIFT Code */}
+                    <div>
+                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">SWIFT Code</p>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
+                        <p className="text-white font-mono font-bold text-lg">{BANK_INFO.swiftCode}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(BANK_INFO.swiftCode, 'swiftCode')}
+                          className="text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          {copied === 'swiftCode' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* IBAN */}
+                    <div>
+                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">IBAN</p>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
+                        <p className="text-white font-mono font-bold">{BANK_INFO.iban}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(BANK_INFO.iban, 'iban')}
+                          className="text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          {copied === 'iban' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment Reference */}
+                  <div className="pt-4 border-t border-blue-500/20">
+                    <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">⚠️ Payment Reference (IMPORTANT!)</p>
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                      <div>
+                        <p className="text-yellow-400 font-medium text-sm mb-1">Always include in transfer:</p>
+                        <p className="text-yellow-300 font-mono font-bold text-lg">{currentUser?.email || 'Your registered email'}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(currentUser?.email || '', 'email')}
+                        className="text-yellow-400 hover:text-yellow-300 transition-colors"
+                      >
+                        {copied === 'email' ? <CheckCircle className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* 💰 CRYPTO WALLET ADDRESS */
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Wallet className="w-6 h-6 text-purple-400" />
+                  <h3 className="text-xl font-bold text-white">{selectedAsset} Deposit Address</h3>
+                </div>
+
+                <div className="p-6 rounded-xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-gray-300 font-medium">Send {selectedAsset} to this address:</p>
+                    {copied === 'wallet' && (
+                      <span className="text-green-400 text-sm flex items-center space-x-1 animate-pulse">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Copied!</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-3 p-4 rounded-xl bg-black/20 border border-white/10">
+                    <p className="flex-1 text-white font-mono text-sm md:text-base break-all">
+                      {CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS] || 'Wallet address not available'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS], 'wallet')}
+                      className="p-3 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all flex-shrink-0"
+                    >
+                      <Copy className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* QR Code Placeholder */}
+                  <div className="mt-6 flex justify-center">
+                    <div className="w-48 h-48 rounded-xl bg-white p-4 flex items-center justify-center border-4 border-purple-500/20">
+                      <div className="text-center">
+                        <Wallet className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-600 text-xs font-semibold">QR Code</p>
+                        <p className="text-gray-400 text-xs mt-1">Coming Soon</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Crypto Instructions */}
+                <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+                  <div className="flex items-start space-x-3">
+                    <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-yellow-400">
+                      <p className="font-semibold mb-2">Important:</p>
+                      <ul className="space-y-1 text-yellow-400/90">
+                        <li>• Only send {selectedAsset} to this address</li>
+                        <li>• Minimum deposit: $10 USD equivalent</li>
+                        <li>• Network confirmations required: {selectedAsset === 'BTC' ? '3' : selectedAsset === 'ETH' ? '12' : '6'}</li>
+                        <li>• Funds credited after network confirmations</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Payment Method */}
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">Payment Method</label>
@@ -404,16 +626,19 @@ export default function Deposit() {
 
           {/* Payment Proof */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">Payment Proof</label>
+            <label className="block text-sm font-medium text-gray-400 mb-2">Payment Proof (Upload Receipt/Screenshot)</label>
             <input
               type="file"
               accept="image/*,.pdf"
               onChange={handleFileUpload}
-              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-500 file:text-white file:cursor-pointer"
+              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-500 file:text-white file:cursor-pointer hover:file:bg-purple-600 transition-all"
               required
             />
             {paymentProof && (
-              <p className="text-green-400 text-sm mt-2">✓ {paymentProof.name}</p>
+              <p className="text-green-400 text-sm mt-2 flex items-center space-x-2">
+                <CheckCircle className="w-4 h-4" />
+                <span>{paymentProof.name}</span>
+              </p>
             )}
           </div>
 
@@ -421,7 +646,7 @@ export default function Deposit() {
           <button
             type="submit"
             disabled={loading || uploadingProof || !paymentProof || !usdAmount}
-            className="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center space-x-2"
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-all transform hover:scale-[1.02]"
           >
             {loading || uploadingProof ? (
               <>
