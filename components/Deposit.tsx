@@ -282,7 +282,7 @@ export default function Deposit() {
         }
       ])
 
-      alert('✅ Deposit request submitted successfully! Please wait for processing.')
+      alert('Deposit request submitted successfully! Please wait for processing.')
       
       setUsdAmount('')
       setCryptoAmount('0.00000000')
@@ -362,7 +362,6 @@ export default function Deposit() {
               step="0.01"
               className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm sm:text-base focus:outline-none focus:border-green-500"
             />
-          </div>
             
             {!pricesLoading && selectedAsset !== 'USD' && parseFloat(usdAmount) > 0 && (
               <div className="mt-3 p-3 sm:p-4 rounded-lg bg-green-500/10 border border-green-500/20">
@@ -420,7 +419,7 @@ export default function Deposit() {
 
                 <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                   <p className="text-yellow-400 text-xs sm:text-sm font-medium mb-1">
-                    ⚠️ Important: Payment Reference
+                    Important: Payment Reference
                   </p>
                   <p className="text-yellow-400/80 text-xs break-all">
                     Please use your email <strong>({currentUser?.email})</strong> as the payment reference/memo
@@ -443,7 +442,7 @@ export default function Deposit() {
                       Network: <strong>{CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.network}</strong>
                     </p>
                     <p className="text-blue-400/80 text-xs mt-1">
-                      Please ensure you're using the correct network. Sending on wrong network will result in loss of funds!
+                      Please ensure you are using the correct network. Sending on wrong network will result in loss of funds!
                     </p>
                   </div>
                 </div>
@@ -490,7 +489,7 @@ export default function Deposit() {
 
               <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                 <p className="text-yellow-400 text-xs sm:text-sm">
-                  ⏱️ Minimum <strong>{CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.confirmations} network confirmations</strong> required
+                  Minimum <strong>{CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.confirmations} network confirmations</strong> required
                 </p>
               </div>
             </div>
