@@ -1,31 +1,70 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowDownCircle, Loader2, DollarSign, Bitcoin, AlertCircle, TrendingUp, Copy, CheckCircle, Building, Wallet } from 'lucide-react'
+import { ArrowDownCircle, Loader2, DollarSign, Bitcoin, AlertCircle, TrendingUp, Copy, CheckCircle, Building, Wallet, QrCode } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { motion } from 'framer-motion'
+import QRCode from 'qrcode'
 
-// 🔧 DEMO WALLET ADDRESSES - Replace with your actual wallet addresses
+// 🔧 CRYPTO WALLET ADDRESSES - Replace with your actual wallet addresses
 const CRYPTO_WALLETS = {
-  BTC: 'bc1qjwpl49rh53p3s7euxq9t074mfxmtxue70rzve6',
-  ETH: '0xba99397e779F619FbEaAc6f1924f2F0cd79134EA',
-  USDT: '0xba99397e779F619FbEaAc6f1924f2F0cd79134EA',
-  SOL: '7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV',
-  ADA: 'addr1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlhxu56se8d2v',
-  BNB: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
-  XRP: 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh',
-  DOGE: 'DH5yaieqoZN36fDVciNyRueRGvGLR3mr7L'
+  BTC: {
+    address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+    network: 'Bitcoin Network',
+    confirmations: 3
+  },
+  ETH: {
+    address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    network: 'Ethereum (ERC-20)',
+    confirmations: 12
+  },
+  USDT: {
+    address: 'TYDzsYUEpvnYmQk4zGP9sWWcTEd2MiAtW6',
+    network: 'Ethereum (ERC-20)',  // ✅ ERC-20 Network specified
+    confirmations: 12
+  },
+  SOL: {
+    address: '7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV',
+    network: 'Solana Network',
+    confirmations: 32
+  },
+  ADA: {
+    address: 'addr1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlhxu56se8d2v',
+    network: 'Cardano Network',
+    confirmations: 15
+  },
+  BNB: {
+    address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    network: 'BNB Smart Chain (BEP-20)',
+    confirmations: 15
+  },
+  XRP: {
+    address: 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh',
+    network: 'Ripple Network',
+    confirmations: 1
+  },
+  DOGE: {
+    address: 'DH5yaieqoZN36fDVciNyRueRGvGLR3mr7L',
+    network: 'Dogecoin Network',
+    confirmations: 6
+  }
 }
 
-// 🏦 BANK TRANSFER DETAILS - Replace with your actual bank details
+// 🏦 BANK TRANSFER DETAILS
 const BANK_INFO = {
-  bankName: 'Sofi Bank',
+  bankName: 'JPMorgan Chase Bank',
   accountName: 'CryptoVault Holdings LLC',
   accountNumber: '1234567890',
   routingNumber: '021000021',
   swiftCode: 'CHASUS33',
   iban: 'US12 BANK 0000 1234 5678 90',
   bankAddress: '270 Park Avenue, New York, NY 10017, USA'
+}
+
+// ✅ MINIMUM DEPOSIT AMOUNTS
+const MIN_DEPOSIT = {
+  USD: 500,      // $500 minimum for USD
+  CRYPTO: 250    // $250 minimum for crypto
 }
 
 export default function Deposit() {
@@ -40,6 +79,8 @@ export default function Deposit() {
   const [uploadingProof, setUploadingProof] = useState(false)
   const [copied, setCopied] = useState('')
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
+  const [generatingQR, setGeneratingQR] = useState(false)
 
   useEffect(() => {
     fetchUser()
@@ -52,6 +93,13 @@ export default function Deposit() {
     calculateCryptoAmount()
   }, [usdAmount, selectedAsset, cryptoPrices])
 
+  // ✅ Generate QR Code when wallet address changes
+  useEffect(() => {
+    if (selectedAsset !== 'USD' && CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]) {
+      generateQRCode(CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS].address)
+    }
+  }, [selectedAsset])
+
   const fetchUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     setCurrentUser(user)
@@ -59,49 +107,83 @@ export default function Deposit() {
 
   const fetchPrices = async () => {
     try {
-      // ✅ Use server-side API route to avoid CORS/rate limit
-      const response = await fetch('/api/crypto-prices?symbols=BTC,ETH,USDT,SOL,ADA,BNB,XRP,DOGE')
+      const response = await fetch('/api/crypto-prices')
       const data = await response.json()
       
       if (data.success) {
-        console.log('✅ Fetched prices:', data.prices)
         setCryptoPrices(data.prices)
-      } else {
-        throw new Error(data.error)
       }
-      
       setPricesLoading(false)
     } catch (error) {
       console.error('Error fetching prices:', error)
-      // Fallback prices
-      setCryptoPrices({
-        BTC: { price: 42000, change24h: 0 },
-        ETH: { price: 3300, change24h: 0 },
-        USDT: { price: 1, change24h: 0 },
-        USD: { price: 1, change24h: 0 }
-      })
       setPricesLoading(false)
     }
   }
 
+  // ✅ Generate QR Code for wallet address
+  const generateQRCode = async (address: string) => {
+    setGeneratingQR(true)
+    try {
+      const qrDataUrl = await QRCode.toDataURL(address, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      })
+      setQrCodeUrl(qrDataUrl)
+    } catch (error) {
+      console.error('Error generating QR code:', error)
+    } finally {
+      setGeneratingQR(false)
+    }
+  }
+
+  const getAssetPrice = (asset: string): number => {
+    if (asset === 'USD') return 1
+    return cryptoPrices[asset]?.price || 0
+  }
+
   const calculateCryptoAmount = () => {
     const usd = parseFloat(usdAmount) || 0
-    const priceData = cryptoPrices[selectedAsset]
-    const price = priceData?.price || 1
     
     if (selectedAsset === 'USD') {
       setCryptoAmount(usd.toFixed(2))
-    } else {
+      return
+    }
+
+    const price = getAssetPrice(selectedAsset)
+    
+    if (price > 0) {
       const crypto = usd / price
       setCryptoAmount(crypto.toFixed(8))
+    } else {
+      setCryptoAmount('0.00000000')
+    }
+  }
+
+  // ✅ Validate minimum deposit amounts
+  const validateMinimumDeposit = (): { valid: boolean; error: string } => {
+    const usd = parseFloat(usdAmount) || 0
+    
+    if (selectedAsset === 'USD') {
+      if (usd < MIN_DEPOSIT.USD) {
+        return {
+          valid: false,
+          error: `Minimum USD deposit is $${MIN_DEPOSIT.USD.toLocaleString()}`
+        }
+      }
+    } else {
+      if (usd < MIN_DEPOSIT.CRYPTO) {
+        return {
+          valid: false,
+          error: `Minimum crypto deposit is $${MIN_DEPOSIT.CRYPTO.toLocaleString()}`
+        }
+      }
     }
     
-    console.log('💰 CONVERSION:', {
-      usdInput: usd,
-      asset: selectedAsset,
-      marketPrice: price,
-      cryptoCalculated: usd / price
-    })
+    return { valid: true, error: '' }
   }
 
   const handleCopy = (text: string, label: string) => {
@@ -110,22 +192,25 @@ export default function Deposit() {
     setTimeout(() => setCopied(''), 2000)
   }
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf']
-    if (!validTypes.includes(file.type)) {
-      alert('Please upload a valid image (JPG, PNG, WebP) or PDF file')
-      return
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0]
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB')
+        return
+      }
+      
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf']
+      if (!allowedTypes.includes(file.type)) {
+        alert('Only images (JPEG, PNG, GIF) and PDF files are allowed')
+        return
+      }
+      
+      setPaymentProof(file)
     }
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be less than 5MB')
-      return
-    }
-
-    setPaymentProof(file)
   }
 
   const uploadPaymentProof = async (file: File): Promise<string | null> => {
@@ -156,49 +241,18 @@ export default function Deposit() {
     }
   }
 
-  const handleDeposit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    const usd = parseFloat(usdAmount)
-    const crypto = parseFloat(cryptoAmount)
-
-    console.log('🔍 FORM SUBMISSION:', {
-      usdAmount: usd,
-      cryptoAmount: crypto,
-      asset: selectedAsset
-    })
-
-    // ✅ CRITICAL VALIDATION
-    if (!usd || usd <= 0) {
-      alert('❌ Please enter a valid USD amount')
+    // ✅ Validate minimum deposit
+    const validation = validateMinimumDeposit()
+    if (!validation.valid) {
+      alert(validation.error)
       return
     }
-
-    if (!crypto || crypto <= 0) {
-      alert('❌ Invalid crypto amount calculated. Please refresh and try again.')
-      return
-    }
-
+    
     if (!paymentProof) {
-      alert('❌ Please upload payment proof')
-      return
-    }
-
-    // ✅ VALIDATE CONVERSION
-    const priceData = cryptoPrices[selectedAsset]
-    const currentPrice = priceData?.price || 1
-    const expectedCrypto = usd / currentPrice
-
-    console.log('🔍 VALIDATION CHECK:', {
-      usdAmount: usd,
-      cryptoAmount: crypto,
-      currentPrice,
-      expectedCrypto,
-      difference: Math.abs(crypto - expectedCrypto)
-    })
-
-    if (Math.abs(crypto - expectedCrypto) > 0.00000001 && selectedAsset !== 'USD') {
-      alert('⚠️ Conversion error detected. Please refresh the page and try again.')
+      alert('Please upload payment proof')
       return
     }
 
@@ -212,75 +266,56 @@ export default function Deposit() {
       const proofUrl = await uploadPaymentProof(paymentProof)
       if (!proofUrl) throw new Error('Failed to upload payment proof')
 
-      console.log('📤 CREATING TRANSACTION:', {
-        user_id: user.id,
-        type: 'deposit',
-        asset: selectedAsset,
-        amount: crypto,  // ✅ CRYPTO AMOUNT
-        value_usd: usd,  // ✅ USD AMOUNT
-        status: 'pending',
-        currentPrice
-      })
+      const cryptoAmountNum = parseFloat(cryptoAmount)
+      const usdAmountNum = parseFloat(usdAmount)
 
-      // ✅ INSERT TRANSACTION
-      const { data: txData, error: txError } = await supabase
+      // Insert transaction
+      const { error: insertError } = await supabase
         .from('transactions')
-        .insert({
+        .insert([
+          {
+            user_id: user.id,
+            type: 'deposit',
+            asset: selectedAsset,
+            amount: cryptoAmountNum,
+            value_usd: usdAmountNum,
+            status: 'pending',
+            payment_proof_url: proofUrl
+          }
+        ])
+
+      if (insertError) throw insertError
+
+      // Create notification
+      await supabase.from('notifications').insert([
+        {
           user_id: user.id,
           type: 'deposit',
-          asset: selectedAsset,
-          amount: crypto,      // ✅ Crypto (0.00238 BTC)
-          value_usd: usd,      // ✅ USD ($100)
-          status: 'pending',
-          payment_method: paymentMethod,
-          payment_proof_url: proofUrl
-        })
-        .select()
-        .single()
-
-      if (txError) {
-        console.error('❌ INSERT ERROR:', txError)
-        throw txError
-      }
-
-      console.log('✅ TRANSACTION CREATED IN DB:', txData)
-
-      // Notification
-      await supabase
-        .from('notifications')
-        .insert({
-          user_id: user.id,
-          type: 'deposit',
-          title: 'Deposit Submitted',
-          message: `Your deposit of $${usd.toFixed(2)} (≈ ${crypto.toFixed(8)} ${selectedAsset}) has been submitted and is pending approval.`,
+          title: 'Deposit Request Submitted',
+          message: `Your deposit of $${usdAmountNum.toFixed(2)} (${cryptoAmountNum.toFixed(8)} ${selectedAsset}) has been submitted and is pending approval.`,
           read: false
-        })
+        }
+      ])
 
-      alert(`✅ Deposit submitted!
-
-💵 USD: $${usd.toFixed(2)}
-₿ ${selectedAsset}: ${crypto.toFixed(8)}
-📊 Price: $${currentPrice.toLocaleString()}
-
-⏳ Waiting for admin approval.`)
+      alert('✅ Deposit request submitted successfully! Please wait for admin approval.')
       
+      // Reset form
       setUsdAmount('')
       setCryptoAmount('0.00000000')
       setPaymentProof(null)
       
-      setTimeout(() => window.location.reload(), 1000)
-      
+      // Refresh page after 2 seconds
+      setTimeout(() => {
+        window.location.reload()
+      }, 2000)
+
     } catch (error: any) {
-      console.error('❌ DEPOSIT ERROR:', error)
-      alert(`Error: ${error.message || 'Failed to submit deposit'}`)
+      console.error('Deposit error:', error)
+      alert(error.message || 'Failed to submit deposit')
     } finally {
       setLoading(false)
     }
   }
-
-  const currentPrice = cryptoPrices[selectedAsset]?.price || 1
-  const priceChange = cryptoPrices[selectedAsset]?.change24h || 0
-  const isPriceUp = priceChange >= 0
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -290,376 +325,322 @@ export default function Deposit() {
             <ArrowDownCircle className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white">Deposit Funds</h2>
-            <p className="text-gray-400">Add funds to your account</p>
+            <h2 className="text-2xl font-bold text-white">Make a Deposit</h2>
+            <p className="text-gray-400">Fund your account with crypto or fiat</p>
           </div>
         </div>
 
-        {/* Debug Info */}
-        {!pricesLoading && (
-          <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs">
-            <p className="text-blue-400 font-mono">
-              🔍 {selectedAsset} Price: ${currentPrice.toLocaleString()} | 
-              ${usdAmount || '0'} ÷ ${currentPrice.toLocaleString()} = {cryptoAmount} {selectedAsset}
-            </p>
+        {/* ✅ Minimum Deposit Notice */}
+        <div className="mb-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="text-blue-400 font-medium mb-1">Minimum Deposit Requirements:</p>
+              <ul className="space-y-1 text-blue-400/80">
+                <li>• USD deposits: Minimum <strong>${MIN_DEPOSIT.USD.toLocaleString()}</strong></li>
+                <li>• Crypto deposits: Minimum <strong>${MIN_DEPOSIT.CRYPTO.toLocaleString()}</strong> equivalent</li>
+              </ul>
+            </div>
           </div>
-        )}
+        </div>
 
-        <form onSubmit={handleDeposit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Asset Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Select Asset
-            </label>
-            <div className="grid grid-cols-4 gap-3">
-              {['BTC', 'ETH', 'USDT', 'USD'].map((asset) => {
-                const assetPrice = cryptoPrices[asset]?.price || 1
-                return (
-                  <button
-                    key={asset}
-                    type="button"
-                    onClick={() => setSelectedAsset(asset)}
-                    className={`p-4 rounded-xl border-2 transition-all ${
-                      selectedAsset === asset
-                        ? 'border-purple-500 bg-purple-500/20'
-                        : 'border-white/10 bg-white/5 hover:border-white/20'
-                    }`}
-                  >
-                    <p className="text-white font-bold text-lg">{asset}</p>
-                    {!pricesLoading && (
-                      <p className="text-gray-400 text-xs mt-1">
-                        ${assetPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                      </p>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-            
-            {!pricesLoading && selectedAsset !== 'USD' && (
-              <div className="mt-3 p-3 rounded-lg bg-white/5 border border-white/10">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Current {selectedAsset} Price</span>
-                  <div className="text-right">
-                    <p className="text-white font-bold">
-                      ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                    <p className={`text-xs flex items-center justify-end gap-1 ${isPriceUp ? 'text-green-400' : 'text-red-400'}`}>
-                      <TrendingUp className={`w-3 h-3 ${!isPriceUp && 'rotate-180'}`} />
-                      {isPriceUp ? '+' : ''}{priceChange.toFixed(2)}% (24h)
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            <label className="block text-sm font-medium text-gray-400 mb-2">Select Asset</label>
+            <select
+              value={selectedAsset}
+              onChange={(e) => setSelectedAsset(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-green-500"
+              required
+            >
+              <option value="USD">USD (US Dollar) - Min $500</option>
+              <option value="BTC">BTC (Bitcoin) - Min $250</option>
+              <option value="ETH">ETH (Ethereum) - Min $250</option>
+              <option value="USDT">USDT (Tether ERC-20) - Min $250</option>
+              <option value="SOL">SOL (Solana) - Min $250</option>
+              <option value="ADA">ADA (Cardano) - Min $250</option>
+              <option value="BNB">BNB (Binance Coin) - Min $250</option>
+              <option value="XRP">XRP (Ripple) - Min $250</option>
+              <option value="DOGE">DOGE (Dogecoin) - Min $250</option>
+            </select>
           </div>
 
-          {/* USD Input */}
+          {/* Amount Input */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              USD Amount
-            </label>
+            <label className="block text-sm font-medium text-gray-400 mb-2">Amount (USD)</label>
             <div className="relative">
-              <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="number"
                 value={usdAmount}
                 onChange={(e) => setUsdAmount(e.target.value)}
-                placeholder="0.00"
-                min="1"
+                placeholder={selectedAsset === 'USD' ? '500.00' : '250.00'}
+                min={selectedAsset === 'USD' ? MIN_DEPOSIT.USD : MIN_DEPOSIT.CRYPTO}
                 step="0.01"
-                className="w-full pl-12 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 text-white text-lg font-bold focus:outline-none focus:border-purple-500"
+                className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-green-500"
                 required
               />
             </div>
-          </div>
-
-          {/* Crypto Display */}
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              You Will Receive
-            </label>
-            <div className="relative">
-              <Bitcoin className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-400" />
-              <input
-                type="text"
-                value={cryptoAmount}
-                readOnly
-                className="w-full pl-12 pr-20 py-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-lg font-bold"
-              />
-              <span className="absolute right-4 top-1/2 transform -translate-y-1/2 text-purple-400 font-bold">
-                {selectedAsset}
-              </span>
-            </div>
-          </div>
-
-          {/* Summary */}
-          {parseFloat(usdAmount) > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20"
-            >
-              <div className="flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-blue-400 font-medium text-sm mb-2">Summary:</p>
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">USD:</span>
-                      <span className="text-white font-bold">${parseFloat(usdAmount).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">{selectedAsset}:</span>
-                      <span className="text-white font-bold">{cryptoAmount}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Price:</span>
-                      <span className="text-white">${currentPrice.toLocaleString()}</span>
-                    </div>
-                  </div>
+            
+            {/* Show calculated crypto amount */}
+            {!pricesLoading && selectedAsset !== 'USD' && parseFloat(usdAmount) > 0 && (
+              <div className="mt-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-400">You will receive:</span>
+                  <span className="text-green-400 font-bold">
+                    {cryptoAmount} {selectedAsset}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-xs text-gray-400">Current price:</span>
+                  <span className="text-gray-300 text-xs">
+                    ${getAssetPrice(selectedAsset).toLocaleString()}
+                  </span>
                 </div>
               </div>
-            </motion.div>
-          )}
+            )}
+          </div>
 
-          {/* 🆕 PAYMENT DETAILS SECTION */}
-          <div className="border-t border-white/10 pt-6">
-            {selectedAsset === 'USD' ? (
-              /* 🏦 BANK TRANSFER DETAILS */
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Building className="w-6 h-6 text-blue-400" />
-                  <h3 className="text-xl font-bold text-white">Bank Transfer Details</h3>
-                </div>
-
-                <div className="p-6 rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-600/10 border border-blue-500/20 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Bank Name */}
-                    <div>
-                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Bank Name</p>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
-                        <p className="text-white font-semibold">{BANK_INFO.bankName}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(BANK_INFO.bankName, 'bankName')}
-                          className="text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          {copied === 'bankName' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Account Name */}
-                    <div>
-                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Account Name</p>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
-                        <p className="text-white font-semibold">{BANK_INFO.accountName}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(BANK_INFO.accountName, 'accountName')}
-                          className="text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          {copied === 'accountName' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Account Number */}
-                    <div>
-                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Account Number</p>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
-                        <p className="text-white font-mono font-bold text-lg">{BANK_INFO.accountNumber}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(BANK_INFO.accountNumber, 'accountNumber')}
-                          className="text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          {copied === 'accountNumber' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Routing Number */}
-                    <div>
-                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Routing Number</p>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
-                        <p className="text-white font-mono font-bold text-lg">{BANK_INFO.routingNumber}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(BANK_INFO.routingNumber, 'routingNumber')}
-                          className="text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          {copied === 'routingNumber' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* SWIFT Code */}
-                    <div>
-                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">SWIFT Code</p>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
-                        <p className="text-white font-mono font-bold text-lg">{BANK_INFO.swiftCode}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(BANK_INFO.swiftCode, 'swiftCode')}
-                          className="text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          {copied === 'swiftCode' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* IBAN */}
-                    <div>
-                      <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">IBAN</p>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
-                        <p className="text-white font-mono font-bold">{BANK_INFO.iban}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(BANK_INFO.iban, 'iban')}
-                          className="text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          {copied === 'iban' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Payment Reference */}
-                  <div className="pt-4 border-t border-blue-500/20">
-                    <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">⚠️ Payment Reference (IMPORTANT!)</p>
-                    <div className="flex items-center justify-between p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                      <div>
-                        <p className="text-yellow-400 font-medium text-sm mb-1">Always include in transfer:</p>
-                        <p className="text-yellow-300 font-mono font-bold text-lg">{currentUser?.email || 'Your registered email'}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(currentUser?.email || '', 'email')}
-                        className="text-yellow-400 hover:text-yellow-300 transition-colors"
-                      >
-                        {copied === 'email' ? <CheckCircle className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* 💰 CRYPTO WALLET ADDRESS */
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Wallet className="w-6 h-6 text-purple-400" />
-                  <h3 className="text-xl font-bold text-white">{selectedAsset} Deposit Address</h3>
-                </div>
-
-                <div className="p-6 rounded-xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20">
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-gray-300 font-medium">Send {selectedAsset} to this address:</p>
-                    {copied === 'wallet' && (
-                      <span className="text-green-400 text-sm flex items-center space-x-1 animate-pulse">
-                        <CheckCircle className="w-4 h-4" />
-                        <span>Copied!</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center space-x-3 p-4 rounded-xl bg-black/20 border border-white/10">
-                    <p className="flex-1 text-white font-mono text-sm md:text-base break-all">
-                      {CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS] || 'Wallet address not available'}
-                    </p>
+          {/* Payment Details */}
+          {selectedAsset === 'USD' ? (
+            /* 🏦 USD BANK TRANSFER DETAILS */
+            <div className="p-6 rounded-xl bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                <Building className="w-5 h-5 mr-2 text-blue-400" />
+                Bank Transfer Details
+              </h3>
+              
+              <div className="space-y-3">
+                <div className="flex justify-between items-center p-3 rounded-lg bg-white/5">
+                  <span className="text-gray-400 text-sm">Bank Name:</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-white font-medium">{BANK_INFO.bankName}</span>
                     <button
                       type="button"
-                      onClick={() => handleCopy(CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS], 'wallet')}
-                      className="p-3 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all flex-shrink-0"
+                      onClick={() => handleCopy(BANK_INFO.bankName, 'bank')}
+                      className="p-1 rounded hover:bg-white/10 transition-colors"
                     >
-                      <Copy className="w-5 h-5" />
+                      {copied === 'bank' ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-gray-400" />
+                      )}
                     </button>
-                  </div>
-
-                  {/* QR Code Placeholder */}
-                  <div className="mt-6 flex justify-center">
-                    <div className="w-48 h-48 rounded-xl bg-white p-4 flex items-center justify-center border-4 border-purple-500/20">
-                      <div className="text-center">
-                        <Wallet className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-600 text-xs font-semibold">QR Code</p>
-                        <p className="text-gray-400 text-xs mt-1">Coming Soon</p>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
-                {/* Crypto Instructions */}
-                <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-                  <div className="flex items-start space-x-3">
-                    <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-yellow-400">
-                      <p className="font-semibold mb-2">Important:</p>
-                      <ul className="space-y-1 text-yellow-400/90">
-                        <li>• Only send {selectedAsset} to this address</li>
-                        <li>• Minimum deposit: $10 USD equivalent</li>
-                        <li>• Network confirmations required: {selectedAsset === 'BTC' ? '3' : selectedAsset === 'ETH' ? '12' : '6'}</li>
-                        <li>• Funds credited after network confirmations</li>
-                      </ul>
-                    </div>
+                <div className="flex justify-between items-center p-3 rounded-lg bg-white/5">
+                  <span className="text-gray-400 text-sm">Account Name:</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-white font-medium">{BANK_INFO.accountName}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(BANK_INFO.accountName, 'accname')}
+                      className="p-1 rounded hover:bg-white/10 transition-colors"
+                    >
+                      {copied === 'accname' ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center p-3 rounded-lg bg-white/5">
+                  <span className="text-gray-400 text-sm">Account Number:</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-white font-medium font-mono">{BANK_INFO.accountNumber}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(BANK_INFO.accountNumber, 'accnum')}
+                      className="p-1 rounded hover:bg-white/10 transition-colors"
+                    >
+                      {copied === 'accnum' ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center p-3 rounded-lg bg-white/5">
+                  <span className="text-gray-400 text-sm">Routing Number:</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-white font-medium font-mono">{BANK_INFO.routingNumber}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(BANK_INFO.routingNumber, 'routing')}
+                      className="p-1 rounded hover:bg-white/10 transition-colors"
+                    >
+                      {copied === 'routing' ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center p-3 rounded-lg bg-white/5">
+                  <span className="text-gray-400 text-sm">SWIFT Code:</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-white font-medium font-mono">{BANK_INFO.swiftCode}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(BANK_INFO.swiftCode, 'swift')}
+                      className="p-1 rounded hover:bg-white/10 transition-colors"
+                    >
+                      {copied === 'swift' ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                  <p className="text-yellow-400 text-sm font-medium mb-1">
+                    ⚠️ Important: Payment Reference
+                  </p>
+                  <p className="text-yellow-400/80 text-xs">
+                    Please use your email <strong>({currentUser?.email})</strong> as the payment reference/memo
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* 💰 CRYPTO WALLET DETAILS WITH QR CODE */
+            <div className="p-6 rounded-xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                <Wallet className="w-5 h-5 mr-2 text-purple-400" />
+                Send {selectedAsset} to this address
+              </h3>
+
+              {/* Network Information */}
+              <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <div className="flex items-start space-x-2">
+                  <AlertCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="text-blue-400 font-medium">
+                      Network: <strong>{CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.network}</strong>
+                    </p>
+                    <p className="text-blue-400/80 text-xs mt-1">
+                      Please ensure you're using the correct network. Sending on wrong network will result in loss of funds!
+                    </p>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Payment Method */}
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">Payment Method</label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
-              required
-            >
-              <option value="bank_transfer">Bank Transfer</option>
-              <option value="wire_transfer">Wire Transfer</option>
-              <option value="crypto_transfer">Crypto Transfer</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
+              {/* QR Code */}
+              <div className="flex flex-col items-center mb-4">
+                {generatingQR ? (
+                  <div className="w-64 h-64 bg-white rounded-xl flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+                  </div>
+                ) : qrCodeUrl ? (
+                  <div className="bg-white p-4 rounded-xl">
+                    <img src={qrCodeUrl} alt="Wallet QR Code" className="w-56 h-56" />
+                    <p className="text-center text-gray-600 text-xs mt-2">Scan to send {selectedAsset}</p>
+                  </div>
+                ) : (
+                  <div className="w-64 h-64 bg-white/5 rounded-xl flex items-center justify-center border border-white/10">
+                    <QrCode className="w-12 h-12 text-gray-600" />
+                  </div>
+                )}
+              </div>
 
-          {/* Payment Proof */}
+              {/* Wallet Address */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-400 mb-2">Wallet Address:</label>
+                <div className="flex items-center space-x-2 p-3 rounded-lg bg-white/5 border border-white/10">
+                  <span className="flex-1 text-white font-mono text-sm break-all">
+                    {CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.address}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.address, 'wallet')}
+                    className="p-2 rounded hover:bg-white/10 transition-colors flex-shrink-0"
+                  >
+                    {copied === 'wallet' ? (
+                      <CheckCircle className="w-5 h-5 text-green-400" />
+                    ) : (
+                      <Copy className="w-5 h-5 text-purple-400" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirmations Required */}
+              <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                <p className="text-yellow-400 text-sm">
+                  ⏱️ Minimum <strong>{CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.confirmations} network confirmations</strong> required
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Proof Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">Payment Proof (Upload Receipt/Screenshot)</label>
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              onChange={handleFileUpload}
-              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-500 file:text-white file:cursor-pointer hover:file:bg-purple-600 transition-all"
-              required
-            />
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Upload Payment Proof *
+            </label>
+            <div className="relative">
+              <input
+                type="file"
+                onChange={handleFileChange}
+                accept="image/*,.pdf"
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-green-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-500/20 file:text-green-400 hover:file:bg-green-500/30"
+                required
+              />
+            </div>
             {paymentProof && (
-              <p className="text-green-400 text-sm mt-2 flex items-center space-x-2">
-                <CheckCircle className="w-4 h-4" />
-                <span>{paymentProof.name}</span>
+              <p className="mt-2 text-sm text-green-400 flex items-center">
+                <CheckCircle className="w-4 h-4 mr-2" />
+                {paymentProof.name} ({(paymentProof.size / 1024 / 1024).toFixed(2)} MB)
               </p>
             )}
+            <p className="mt-2 text-xs text-gray-400">
+              Upload screenshot of payment confirmation or transaction receipt (Max 5MB)
+            </p>
           </div>
 
-          {/* Submit */}
+          {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading || uploadingProof || !paymentProof || !usdAmount}
-            className="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-all transform hover:scale-[1.02]"
+            disabled={loading || uploadingProof || pricesLoading}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2"
           >
             {loading || uploadingProof ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>{uploadingProof ? 'Uploading...' : 'Processing...'}</span>
+                <span>{uploadingProof ? 'Uploading...' : 'Submitting...'}</span>
               </>
             ) : (
               <>
                 <ArrowDownCircle className="w-5 h-5" />
-                <span>Submit Deposit</span>
+                <span>Submit Deposit Request</span>
               </>
             )}
           </button>
+
+          {/* Instructions */}
+          <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+            <h4 className="text-white font-medium mb-2 flex items-center">
+              <AlertCircle className="w-4 h-4 mr-2 text-blue-400" />
+              Important Instructions:
+            </h4>
+            <ul className="space-y-1 text-sm text-gray-400">
+              <li>• {selectedAsset === 'USD' ? `Minimum deposit: $${MIN_DEPOSIT.USD.toLocaleString()}` : `Minimum deposit: $${MIN_DEPOSIT.CRYPTO.toLocaleString()} equivalent`}</li>
+              <li>• {selectedAsset === 'USD' ? 'Use your email as payment reference' : `Send only ${selectedAsset} to this address on ${CRYPTO_WALLETS[selectedAsset as keyof typeof CRYPTO_WALLETS]?.network}`}</li>
+              <li>• Upload clear payment proof (screenshot or receipt)</li>
+              <li>• Deposits are processed after admin approval</li>
+              <li>• Processing time: {selectedAsset === 'USD' ? '2-5 business days' : '10-30 minutes after confirmations'}</li>
+            </ul>
+          </div>
         </form>
       </div>
     </div>
