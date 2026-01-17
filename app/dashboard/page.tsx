@@ -123,10 +123,11 @@ export default function DashboardPage() {
     const fetchPrices = async () => {
       try {
         const response = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether&vs_currencies=usd&include_24hr_change=true'
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,cardano,binancecoin,ripple,dogecoin&vs_currencies=usd&include_24hr_change=true'
         )
         const data = await response.json()
         setCryptoPrices(data)
+        console.log('Fetched crypto prices:', data)
       } catch (error) {
         console.error('Error fetching crypto prices:', error)
       }
@@ -137,17 +138,42 @@ export default function DashboardPage() {
     return () => clearInterval(interval)
   }, [])
 
+  // ✅ Get asset price with proper mapping
+  const getAssetPrice = (asset: string): number => {
+    if (asset === 'USD') return 1
+    
+    // Map crypto symbols to CoinGecko IDs
+    const assetMap: { [key: string]: string } = {
+      'BTC': 'bitcoin',
+      'ETH': 'ethereum',
+      'USDT': 'tether',
+      'SOL': 'solana',
+      'ADA': 'cardano',
+      'BNB': 'binancecoin',
+      'XRP': 'ripple',
+      'DOGE': 'dogecoin'
+    }
+    
+    const coinGeckoId = assetMap[asset] || asset.toLowerCase()
+    const price = cryptoPrices[coinGeckoId]?.usd || 0
+    
+    console.log(`Price for ${asset} (${coinGeckoId}):`, price)
+    return price
+  }
+
   // ✅ Calculate Total Balance from user_balances
   const calculateTotalBalance = () => {
     if (!userBalances.length) return 0
     
-    return userBalances.reduce((total, balance) => {
-      const assetPrice = balance.asset === 'USD' 
-        ? 1 
-        : (cryptoPrices[balance.asset.toLowerCase()]?.usd || 0)
-      
-      return total + (Number(balance.amount) * assetPrice)
+    const total = userBalances.reduce((sum, balance) => {
+      const assetPrice = getAssetPrice(balance.asset)
+      const value = Number(balance.amount) * assetPrice
+      console.log(`Balance calc: ${balance.amount} ${balance.asset} @ $${assetPrice} = $${value}`)
+      return sum + value
     }, 0)
+    
+    console.log('Total balance:', total)
+    return total
   }
 
   // Calculate Total Deposits
@@ -573,9 +599,19 @@ export default function DashboardPage() {
                   ) : (
                     <div className="space-y-4">
                       {userBalances.map(balance => {
-                        const price = balance.asset === 'USD' ? 1 : (cryptoPrices[balance.asset.toLowerCase()]?.usd || 0)
+                        const price = getAssetPrice(balance.asset)
                         const value = Number(balance.amount) * price
-                        const change = balance.asset === 'USD' ? 0 : (cryptoPrices[balance.asset.toLowerCase()]?.usd_24h_change || 0)
+                        
+                        // Get 24h change
+                        let change = 0
+                        if (balance.asset === 'BTC') change = cryptoPrices.bitcoin?.usd_24h_change || 0
+                        else if (balance.asset === 'ETH') change = cryptoPrices.ethereum?.usd_24h_change || 0
+                        else if (balance.asset === 'USDT') change = cryptoPrices.tether?.usd_24h_change || 0
+                        else if (balance.asset === 'SOL') change = cryptoPrices.solana?.usd_24h_change || 0
+                        else if (balance.asset === 'ADA') change = cryptoPrices.cardano?.usd_24h_change || 0
+                        else if (balance.asset === 'BNB') change = cryptoPrices.binancecoin?.usd_24h_change || 0
+                        else if (balance.asset === 'XRP') change = cryptoPrices.ripple?.usd_24h_change || 0
+                        else if (balance.asset === 'DOGE') change = cryptoPrices.dogecoin?.usd_24h_change || 0
                         
                         return (
                           <div key={balance.asset} className="flex items-center justify-between p-4 rounded-xl bg-white/5">
@@ -753,7 +789,7 @@ export default function DashboardPage() {
                       <p className="text-gray-400 col-span-full text-center py-4">No balances available</p>
                     ) : (
                       userBalances.map((balance) => {
-                        const assetPrice = balance.asset === 'USD' ? 1 : (cryptoPrices[balance.asset.toLowerCase()]?.usd || 0)
+                        const assetPrice = getAssetPrice(balance.asset)
                         return (
                           <div key={balance.asset} className="p-4 rounded-xl bg-white/5 border border-white/10">
                             <p className="text-gray-400 text-sm mb-1">{balance.asset}</p>
