@@ -498,7 +498,7 @@ export default function HomePage() {
           </div>
           
           <div className="pt-6 sm:pt-8 border-t border-white/10 text-center text-xs sm:text-sm text-gray-400">
-            <p>&copy; 2026 CryptoVault. All rights reserved.</p>
+            <p>&copy; 2016 - 2026 CryptoVault. All rights reserved.</p>
           </div>
         </div>
       </footer>
