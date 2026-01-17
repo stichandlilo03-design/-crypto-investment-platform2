@@ -54,6 +54,13 @@ export default function DashboardPage() {
   const [withdrawAsset, setWithdrawAsset] = useState('USD')
   const [withdrawAddress, setWithdrawAddress] = useState('')
   
+  // Bank Account State (for USD withdrawals)
+  const [bankName, setBankName] = useState('')
+  const [accountHolderName, setAccountHolderName] = useState('')
+  const [accountNumber, setAccountNumber] = useState('')
+  const [routingNumber, setRoutingNumber] = useState('')
+  const [swiftCode, setSwiftCode] = useState('')
+  
   // Search and Filter
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
@@ -237,6 +244,31 @@ export default function DashboardPage() {
         }
       }
 
+      // ✅ Prepare wallet/bank details
+      let walletOrBankDetails = ''
+      
+      if (withdrawAsset === 'USD') {
+        // Store bank details for USD withdrawals
+        if (!bankName || !accountHolderName || !accountNumber || !routingNumber) {
+          throw new Error('Please fill in all required bank account details')
+        }
+        
+        walletOrBankDetails = JSON.stringify({
+          type: 'bank',
+          bankName,
+          accountHolderName,
+          accountNumber,
+          routingNumber,
+          swiftCode: swiftCode || null
+        })
+      } else {
+        // Store wallet address for crypto withdrawals
+        if (!withdrawAddress) {
+          throw new Error('Please enter your wallet address')
+        }
+        walletOrBankDetails = withdrawAddress
+      }
+
       // ✅ INSERT WITHDRAWAL WITH CORRECT AMOUNTS
       const { error: insertError } = await supabase
         .from('transactions')
@@ -248,7 +280,7 @@ export default function DashboardPage() {
             amount: cryptoAmount,  // Crypto amount
             value_usd: usdAmount,  // USD value
             status: 'pending',
-            wallet_address: withdrawAddress || null
+            wallet_address: walletOrBankDetails
           }
         ])
       
@@ -269,6 +301,11 @@ export default function DashboardPage() {
       setWithdrawCryptoAmount('0.00000000')
       setWithdrawAsset('USD')
       setWithdrawAddress('')
+      setBankName('')
+      setAccountHolderName('')
+      setAccountNumber('')
+      setRoutingNumber('')
+      setSwiftCode('')
       
       const { data } = await supabase
         .from('transactions')
@@ -916,9 +953,90 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {withdrawAsset !== 'USD' && (
+                  {withdrawAsset === 'USD' ? (
+                    // 🏦 Bank Account Details for USD Withdrawals
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-bold text-white mb-4">Bank Account Details</h3>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">Bank Name *</label>
+                        <input
+                          type="text"
+                          value={bankName}
+                          onChange={(e) => setBankName(e.target.value)}
+                          placeholder="Enter your bank name"
+                          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">Account Holder Name *</label>
+                        <input
+                          type="text"
+                          value={accountHolderName}
+                          onChange={(e) => setAccountHolderName(e.target.value)}
+                          placeholder="Name as shown on bank account"
+                          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">Account Number *</label>
+                        <input
+                          type="text"
+                          value={accountNumber}
+                          onChange={(e) => setAccountNumber(e.target.value)}
+                          placeholder="Your bank account number"
+                          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500 font-mono"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">Routing Number *</label>
+                        <input
+                          type="text"
+                          value={routingNumber}
+                          onChange={(e) => setRoutingNumber(e.target.value)}
+                          placeholder="9-digit routing number"
+                          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500 font-mono"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">SWIFT/BIC Code (Optional)</label>
+                        <input
+                          type="text"
+                          value={swiftCode}
+                          onChange={(e) => setSwiftCode(e.target.value)}
+                          placeholder="For international transfers"
+                          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500 font-mono"
+                        />
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                        <div className="flex items-start space-x-3">
+                          <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                          <div className="text-sm text-blue-400">
+                            <p className="font-medium mb-1">Bank Transfer Information:</p>
+                            <ul className="space-y-1 text-blue-400/80">
+                              <li>• Processing time: 2-5 business days</li>
+                              <li>• Ensure account details are accurate</li>
+                              <li>• SWIFT code required for international transfers</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    // 💰 Wallet Address for Crypto Withdrawals
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">Wallet Address *</label>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        {withdrawAsset} Wallet Address *
+                      </label>
                       <input
                         type="text"
                         value={withdrawAddress}
@@ -927,6 +1045,9 @@ export default function DashboardPage() {
                         className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-purple-500 font-mono text-sm"
                         required
                       />
+                      <p className="text-gray-400 text-sm mt-2">
+                        ⚠️ Double-check your wallet address. Transactions cannot be reversed.
+                      </p>
                     </div>
                   )}
 
