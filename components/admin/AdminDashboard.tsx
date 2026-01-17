@@ -1051,7 +1051,8 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
     
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f]">
-      <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40 overflow-y-auto">
+      {/* ✅ DESKTOP SIDEBAR - FIXED WITH FLEXBOX */}
+      <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-64 glass-effect border-r border-white/10 p-6 z-40 flex-col">
         <div className="flex items-center space-x-2 mb-8">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
             <Shield className="w-6 h-6 text-white" />
@@ -1062,7 +1063,8 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
           </div>
         </div>
         
-        <nav className="space-y-2">
+        {/* Main Navigation - Takes Available Space */}
+        <nav className="flex-1 space-y-2 overflow-y-auto">
           {[
             { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
             { id: 'deposits', icon: Download, label: 'Deposits' },
@@ -1088,7 +1090,8 @@ New Balance: ${newAmount.toFixed(8)} ${adjustmentAsset}`)
           ))}
         </nav>
         
-        <div className="absolute bottom-6 left-6 right-6 space-y-2">
+        {/* Bottom Links - Always at Bottom */}
+        <div className="mt-auto pt-4 border-t border-white/10 space-y-2">
           <a href="/dashboard" className="flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all">
             <Home className="w-5 h-5" />
             <span>Main Site</span>
