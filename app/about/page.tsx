@@ -408,7 +408,7 @@ export default function AboutPage() {
                 <MapPin className="w-8 h-8 text-purple-400 mx-auto mb-3" />
                 <h3 className="font-bold text-white mb-2">Visit Us</h3>
                 <p className="text-gray-400">
-                  123 Crypto Street<br />
+                  1 Dr Carlton B Goodlett Pl<br />
                   San Francisco, CA 94102
                 </p>
               </div>
