@@ -391,16 +391,16 @@ export default function AboutPage() {
               <div className="glass-effect rounded-xl p-6">
                 <Mail className="w-8 h-8 text-purple-400 mx-auto mb-3" />
                 <h3 className="font-bold text-white mb-2">Email Us</h3>
-                <a href="mailto:support@cryptovault.com" className="text-gray-400 hover:text-purple-400 transition">
-                  support@cryptovault.com
+                <a href="mailto:support@cryptovaultnew.sbs" className="text-gray-400 hover:text-purple-400 transition">
+                  support@cryptovaultnew.sbs
                 </a>
               </div>
 
               <div className="glass-effect rounded-xl p-6">
                 <Phone className="w-8 h-8 text-purple-400 mx-auto mb-3" />
                 <h3 className="font-bold text-white mb-2">Call Us</h3>
-                <a href="tel:+15551234567" className="text-gray-400 hover:text-purple-400 transition">
-                  +1 (555) 123-4567
+                <a href="tel:+18036301295" className="text-gray-400 hover:text-purple-400 transition">
+                  +1 (803) 630-1295
                 </a>
               </div>
 
