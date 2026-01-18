@@ -28,9 +28,9 @@ export default function AboutPage() {
       name: "Michael Anderson",
       role: "Chief Executive Officer (CEO)",
       bio: "15+ years in blockchain technology and financial services. Former Goldman Sachs executive who pioneered digital asset management strategies.",
-      email: "michael.anderson@cryptovault.com",
-      phone: "+1 (555) 123-4567",
-      image: "https://randomuser.me/api/portraits/men/32.jpg", // Replace with your image URL
+      email: "michael.anderson@cryptovaultnew.sbs",
+      phone: "+1 (555) 891-7867",
+      image: "https://image2url.com/r2/default/images/1768677830595-fc011237-fdcc-414f-a83d-620bd09d498a.jpg", // Replace with your image URL
       linkedin: "https://linkedin.com/in/michael-anderson",
       twitter: "https://twitter.com/m_anderson"
     },
@@ -38,9 +38,9 @@ export default function AboutPage() {
       name: "Sarah Mitchell",
       role: "Chief Technology Officer (CTO)",
       bio: "MIT Computer Science graduate with expertise in blockchain security and distributed systems. Previously led engineering at Coinbase.",
-      email: "sarah.mitchell@cryptovault.com",
-      phone: "+1 (555) 123-4568",
-      image: "https://randomuser.me/api/portraits/women/44.jpg", // Replace with your image URL
+      email: "sarah.mitchell@cryptovaultnew.sbs",
+      phone: "+1 (555) 782-8911",
+      image: "https://image2url.com/r2/default/images/1768678174196-f666d590-62a2-4248-af1c-e43c65ae1995.jpg", // Replace with your image URL
       linkedin: "https://linkedin.com/in/sarah-mitchell",
       twitter: "https://twitter.com/s_mitchell"
     },
@@ -48,9 +48,9 @@ export default function AboutPage() {
       name: "David Chen",
       role: "Chief Financial Officer (CFO)",
       bio: "Former JP Morgan director with 20 years in institutional finance. Expert in cryptocurrency regulation and compliance.",
-      email: "david.chen@cryptovault.com",
-      phone: "+1 (555) 123-4569",
-      image: "https://randomuser.me/api/portraits/men/46.jpg", // Replace with your image URL
+      email: "david.chen@cryptovaultnew.sbs",
+      phone: "+1 (555) 398-1569",
+      image: "https://image2url.com/r2/default/images/1768678382603-cec2dde3-18e4-40fa-a171-83a13ed9ee4a.jpg", // Replace with your image URL
       linkedin: "https://linkedin.com/in/david-chen",
       twitter: "https://twitter.com/d_chen"
     },
@@ -58,9 +58,9 @@ export default function AboutPage() {
       name: "Emily Rodriguez",
       role: "Chief Operating Officer (COO)",
       bio: "Scaled operations at multiple fintech startups. Harvard MBA with focus on emerging markets and digital transformation.",
-      email: "emily.rodriguez@cryptovault.com",
-      phone: "+1 (555) 123-4570",
-      image: "https://randomuser.me/api/portraits/women/65.jpg", // Replace with your image URL
+      email: "emily.rodriguez@cryptovaultnew.sbs",
+      phone: "+1 (555) 843-4710",
+      image: "https://image2url.com/r2/default/images/1768678487476-ea1e74d8-b60c-4e62-a526-a334226646e2.jpg", // Replace with your image URL
       linkedin: "https://linkedin.com/in/emily-rodriguez",
       twitter: "https://twitter.com/e_rodriguez"
     },
@@ -68,9 +68,9 @@ export default function AboutPage() {
       name: "James Wilson",
       role: "Chief Security Officer (CSO)",
       bio: "Cybersecurity expert with government and private sector experience. Designed security protocols for major crypto exchanges.",
-      email: "james.wilson@cryptovault.com",
-      phone: "+1 (555) 123-4571",
-      image: "https://randomuser.me/api/portraits/men/52.jpg", // Replace with your image URL
+      email: "james.wilson@cryptovaultnew.sbs",
+      phone: "+1 (555) 362-3711",
+      image: "https://image2url.com/r2/default/images/1768678585582-8e070471-6751-4188-aec7-6706420e6814.jpg", // Replace with your image URL
       linkedin: "https://linkedin.com/in/james-wilson",
       twitter: "https://twitter.com/j_wilson"
     },
@@ -78,9 +78,9 @@ export default function AboutPage() {
       name: "Lisa Thompson",
       role: "Chief Marketing Officer (CMO)",
       bio: "Digital marketing pioneer with proven track record in crypto industry. Grew user base from 10K to 500K+ at previous company.",
-      email: "lisa.thompson@cryptovault.com",
-      phone: "+1 (555) 123-4572",
-      image: "https://randomuser.me/api/portraits/women/68.jpg", // Replace with your image URL
+      email: "lisa.thompson@cryptovaultnew.sbs",
+      phone: "+1 (555) 893-7862",
+      image: "https://image2url.com/r2/default/images/1768678698672-7ae4b436-9f81-4705-b13d-e82642ba9ab6.jpg", // Replace with your image URL
       linkedin: "https://linkedin.com/in/lisa-thompson",
       twitter: "https://twitter.com/l_thompson"
     }
